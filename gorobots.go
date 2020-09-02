@@ -12,13 +12,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	Version        = "v1.0a 02/09/2020"
+	Separator      = string(os.PathSeparator)
+	RobotBinaryExt = ".ro"
+	RobotSourceExt = ".r"
+)
+
 type tournamentConfig struct {
-	label      string   `yaml:"label"`
-	matchF2F   int      `yaml:"matchF2F"`
-	match3VS3  int      `yaml:"match3VS3"`
-	match4VS4  int      `yaml:"match4VS4"`
-	sourcePath string   `yaml:"sourcePath"`
-	listRobots []string `yaml:"listRobots"`
+	Label      string   `yaml:"label"`
+	MatchF2F   int      `yaml:"matchF2F"`
+	Match3VS3  int      `yaml:"match3VS3"`
+	Match4VS4  int      `yaml:"match4VS4"`
+	SourcePath string   `yaml:"sourcePath"`
+	ListRobots []string `yaml:"listRobots"`
 }
 
 var schema = map[string]int{"f2f": 2, "3vs3": 3, "4vs4": 4}
@@ -51,11 +58,23 @@ func logToString(file string) string {
 	return string(content)
 }
 
+// fileExists checks if a file exists and is not a directory before we
+// try using it to prevent further errors.
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
 func main() {
 
-	tournamentType := flag.String("t", "all", "tournament type: all, f2f, 3vs3 or 4vs4")
-	// configFile := flag.String("c", "config.yaml", "YAML configuration file")
-	parseLog := flag.String("p", "test.log", "parse log file")
+	log.Println("GoRobots", Version)
+
+	tournamentType := flag.String("type", "all", "tournament type: all, f2f, 3vs3 or 4vs4")
+	configFile := flag.String("config", "config.yml", "YAML configuration file")
+	parseLog := flag.String("parse", "", "parse log file")
 
 	flag.Parse()
 
@@ -91,6 +110,28 @@ func main() {
 		fmt.Printf("result: %v\n", robots)
 		return
 	}
+
+	config := loadConfig(*configFile)
+
+	listSize := len(config.ListRobots)
+
+	if listSize < 1 {
+		log.Fatal("Robot list empty!")
+	}
+
+	var robots []string
+
+	for _, r := range config.ListRobots {
+		t := config.SourcePath + Separator + r + RobotBinaryExt
+		/*
+			if !fileExists(t) {
+				log.Fatal(fmt.Sprintf("Robot %s cannot be found", t))
+			}*/
+
+		robots = append(robots, t)
+	}
+
+	log.Println("Robots", robots)
 
 	// cmd := exec.Command("crobots", "-m10", "-l200000", "/home/joshua/crobots/bench.r", "/home/joshua/crobots/bench.r")
 	// var out bytes.Buffer
