@@ -9,8 +9,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,12 +20,17 @@ import (
 const (
 	// Version is the software version format v#.##-timestamp
 	Version = "v1.0-20200904"
-	// Separator OS dependent path separator
+	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
-	// RobotBinaryExt is file extension of the compiled binary robot
+	// RobotBinaryExt is the file extension of the compiled binary robot
 	RobotBinaryExt = ".ro"
-	// RobotSourceExt is file extension of the robot source code
+	// RobotSourceExt is the file extension of the robot source code
 	RobotSourceExt = ".r"
+)
+
+var (
+	// NumCPU is the number of detected CPU/cores
+	NumCPU int = runtime.NumCPU()
 )
 
 type match struct {
@@ -149,7 +156,7 @@ func printRobots(tot int, result map[string]count.Robot) {
 		return bots[i].Eff > bots[j].Eff
 	})
 	var i int = 0
-	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%%")
+	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%")
 	for _, robot := range bots {
 		i++
 		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
@@ -159,7 +166,7 @@ func printRobots(tot int, result map[string]count.Robot) {
 func main() {
 
 	log.Println("GoRobots", Version)
-
+	log.Println("Detected CPU(s)/core(s):", NumCPU)
 	tournamentType := flag.String("type", "", "tournament type: f2f, 3vs3 or 4vs4")
 	configFile := flag.String("config", "config.yml", "YAML configuration file")
 	parseLog := flag.String("parse", "", "parse log file")
@@ -221,7 +228,8 @@ func main() {
 	case 4:
 		opt = fmt.Sprintf("-m%d", config.Match4VS4)
 	}
-
+	log.Println("Start processing...")
+	start := time.Now()
 	result := make(map[string]count.Robot)
 	for r := range generateCombinations(robots, tot) {
 		var out bytes.Buffer
@@ -246,6 +254,7 @@ func main() {
 			}
 		}
 	}
-	log.Println("Completed!")
+	duration := time.Since(start)
+	log.Println("Completed in", duration)
 	printRobots(tot, result)
 }
