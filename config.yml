@@ -2,5 +2,5 @@ label: test
 matchF2F: 1000
 match3VS3: 100
 match4VS4: 10
-sourcePath: .
-listRobots: ['test', 'rabbit', 'counter', 'killer']
+sourcePath: 'C:\Users\Heuristik\crobots\crobs'
+listRobots: ['leader', 'sentry', 'politik', 'rambo3', 'leavy', 'cspotrun']

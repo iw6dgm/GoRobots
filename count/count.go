@@ -1,9 +1,16 @@
 package count
 
 import (
+	"os"
 	"strings"
 )
 
+const (
+	// Separator OS dependent path separator
+	Separator = string(os.PathSeparator)
+)
+
+// Robot structure
 type Robot struct {
 	Name   string
 	Games  int
@@ -16,7 +23,7 @@ type Robot struct {
 func getName(s string) string {
 	v := strings.Trim(s, " ")
 
-	if strings.HasPrefix(v, "/") {
+	if strings.HasPrefix(v, Separator) {
 		return v[1 : len(v)-1]
 	}
 

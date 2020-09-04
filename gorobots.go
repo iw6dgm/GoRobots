@@ -2,22 +2,33 @@ package main
 
 import (
 	"GoRobots/count"
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	Version        = "v1.0a 02/09/2020"
-	Separator      = string(os.PathSeparator)
+	// Version is the software version format v#.##-timestamp
+	Version = "v1.0-20200904"
+	// Separator OS dependent path separator
+	Separator = string(os.PathSeparator)
+	// RobotBinaryExt is file extension of the compiled binary robot
 	RobotBinaryExt = ".ro"
+	// RobotSourceExt is file extension of the robot source code
 	RobotSourceExt = ".r"
 )
+
+type match struct {
+	Robots []string
+}
 
 type tournamentConfig struct {
 	Label      string   `yaml:"label"`
@@ -68,80 +79,173 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+func generateCombinations(list []string, size int) <-chan match {
+	c := make(chan match)
+	tot := len(list)
+	go func(c chan match) {
+		defer close(c)
+		switch size {
+		case 2:
+			for i := 0; i < tot-2; i++ {
+				for j := i + 1; j < tot-1; j++ {
+					c <- match{Robots: []string{list[i], list[j]}}
+				}
+			}
+		case 3:
+			for i := 0; i < tot-3; i++ {
+				for j := i + 1; j < tot-2; j++ {
+					for k := j + 1; k < tot-1; k++ {
+						c <- match{Robots: []string{list[i], list[j], list[k]}}
+					}
+				}
+			}
+		case 4:
+			for i := 0; i < tot-4; i++ {
+				for j := i + 1; j < tot-3; j++ {
+					for k := j + 1; k < tot-2; k++ {
+						for z := k + 1; z < tot-1; z++ {
+							c <- match{Robots: []string{list[i], list[j], list[k], list[z]}}
+						}
+					}
+				}
+			}
+		default:
+			log.Fatal("Invalid size", size)
+		}
+	}(c)
+	return c // Return the channel to the calling function
+}
+
+func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
+	switch n {
+	case 2:
+		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1])
+	case 3:
+		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1], m.Robots[2])
+	case 4:
+		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1], m.Robots[2], m.Robots[3])
+	default:
+		log.Fatal("Invalid size", n)
+	}
+	return nil
+}
+
+func printRobots(tot int, result map[string]count.Robot) {
+	var bots []count.Robot
+
+	for _, robot := range result {
+
+		if robot.Games > 0 {
+			ties := 0
+			for _, v := range robot.Ties {
+				ties += v
+			}
+			robot.Points = robot.Wins*tot + ties
+			robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
+		}
+		bots = append(bots, robot)
+	}
+	sort.SliceStable(bots, func(i, j int) bool {
+		return bots[i].Eff > bots[j].Eff
+	})
+	var i int = 0
+	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%%")
+	for _, robot := range bots {
+		i++
+		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+	}
+}
+
 func main() {
 
 	log.Println("GoRobots", Version)
 
-	tournamentType := flag.String("type", "all", "tournament type: all, f2f, 3vs3 or 4vs4")
+	tournamentType := flag.String("type", "", "tournament type: f2f, 3vs3 or 4vs4")
 	configFile := flag.String("config", "config.yml", "YAML configuration file")
 	parseLog := flag.String("parse", "", "parse log file")
+	crobotsExecutable := flag.String("exe", "crobots", "Crobots executable")
 
 	flag.Parse()
 
-	if _, ok := schema[*tournamentType]; !ok && *tournamentType != "all" {
+	if _, ok := schema[*tournamentType]; !ok {
 		log.Fatalln("Invalid tournament type: ", *tournamentType)
 	}
 
+	tot, _ := schema[*tournamentType]
+
 	if *parseLog != "" {
-
-		if *tournamentType == "all" {
-			log.Fatalln("Cannot parse log for all tournament types")
-			return
-		}
-		tot := schema[*tournamentType]
-
 		content := logToString(*parseLog)
 		result := count.ParseLogs(strings.Split(content, "\n"))
-		var robots []count.Robot
 
-		for _, robot := range result {
-
-			if robot.Games > 0 {
-				ties := 0
-				for _, v := range robot.Ties {
-					ties += v
-				}
-				robot.Points = robot.Wins*tot + ties
-				robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
-			}
-			robots = append(robots, robot)
-		}
-
-		fmt.Printf("result: %v\n", robots)
+		printRobots(tot, result)
 		return
 	}
 
 	config := loadConfig(*configFile)
-
 	listSize := len(config.ListRobots)
 
-	if listSize < 1 {
-		log.Fatal("Robot list empty!")
+	if listSize < tot {
+		log.Fatal("Robot list insufficient!")
 	}
 
 	var robots []string
 
 	for _, r := range config.ListRobots {
 		t := config.SourcePath + Separator + r + RobotBinaryExt
-		/*
-			if !fileExists(t) {
-				log.Fatal(fmt.Sprintf("Robot %s cannot be found", t))
-			}*/
+
+		if !fileExists(t) {
+			log.Println("Binary robot cannot be found. Try to compile source code:", t)
+			s := config.SourcePath + Separator + r + RobotSourceExt
+			if fileExists(s) {
+				var out bytes.Buffer
+				cmd := exec.Command(*crobotsExecutable, "-c", s)
+				cmd.Stdout = &out
+				err := cmd.Run()
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				log.Fatal("Robot source code cannot be found:", s)
+			}
+		}
 
 		robots = append(robots, t)
 	}
 
-	log.Println("Robots", robots)
+	var opt string
+	switch tot {
+	case 2:
+		opt = fmt.Sprintf("-m%d", config.MatchF2F)
+	case 3:
+		opt = fmt.Sprintf("-m%d", config.Match3VS3)
+	case 4:
+		opt = fmt.Sprintf("-m%d", config.Match4VS4)
+	}
 
-	// cmd := exec.Command("crobots", "-m10", "-l200000", "/home/joshua/crobots/bench.r", "/home/joshua/crobots/bench.r")
-	// var out bytes.Buffer
-	// cmd.Stdout = &out
-	// err := cmd.Run()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// result := count.ParseLogs(strings.Split(out.String(), "\n"))
-
-	// fmt.Printf("result: %v\n", result)
+	result := make(map[string]count.Robot)
+	for r := range generateCombinations(robots, tot) {
+		var out bytes.Buffer
+		cmd := r.executeCrobotsMatch(*crobotsExecutable, opt, tot)
+		cmd.Stdout = &out
+		err := cmd.Run()
+		if err != nil {
+			log.Fatal(err)
+		}
+		partial := count.ParseLogs(strings.Split(out.String(), "\n"))
+		for _, robot := range partial {
+			name := robot.Name
+			if update, found := result[name]; found {
+				update.Games += robot.Games
+				update.Wins += robot.Wins
+				update.Ties[0] += robot.Ties[0]
+				update.Ties[1] += robot.Ties[1]
+				update.Ties[2] += robot.Ties[2]
+				result[name] = count.Robot{Name: name, Games: update.Games, Wins: update.Wins, Ties: update.Ties, Points: 0, Eff: 0.0}
+			} else {
+				result[name] = count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
+			}
+		}
+	}
+	log.Println("Completed!")
+	printRobots(tot, result)
 }
