@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -29,12 +30,94 @@ const (
 )
 
 var (
-	// NumCPU is the number of detected CPU/cores
+	// NumCPU is the number of detected CPUs/cores
 	NumCPU int = runtime.NumCPU()
 )
 
 type match struct {
 	Robots []string
+}
+
+type process struct {
+	ID    int
+	Match match
+}
+
+type processor struct {
+	ID               int
+	ProcessorChannel chan chan process // used to communicate between dispatcher and workers
+	Channel          chan process
+	End              chan bool
+}
+
+// start processor
+func (p *processor) Start(crobotsExecutable string, opt string, tot int, result *sync.Map) {
+	go func() {
+		for {
+			p.ProcessorChannel <- p.Channel // when the processor is available place channel in queue
+			select {
+			case process := <-p.Channel: // processor has received job
+				process.Match.processCrobotsMatch(crobotsExecutable, opt, tot, result) // do work
+			case <-p.End:
+				return
+			}
+		}
+	}()
+}
+
+// end processor
+func (p *processor) Stop() {
+	log.Printf("worker [%d] is stopping\n", p.ID)
+	p.End <- true
+}
+
+// ProcessorChannel is a channel of available processors (a processor is a channel of processes)
+var ProcessorChannel = make(chan chan process)
+
+// Collector handles jobs to be sent to processors
+type Collector struct {
+	Process chan process // receives jobs to send to processors
+	End     chan bool    // when receives bool stops processors
+}
+
+// StartDispatcher starts processors and return their Collector
+func StartDispatcher(processorCount int, crobotsExecutable string, opt string, tot int, result *sync.Map) Collector {
+	var i int
+	var processors []processor
+	input := make(chan process) // channel to recieve process
+	end := make(chan bool)      // channel to spin down processors
+	collector := Collector{Process: input, End: end}
+
+	for i < processorCount {
+		i++
+		log.Println("Starting processor:", i)
+		processor := processor{
+			ID:               i,
+			Channel:          make(chan process),
+			ProcessorChannel: ProcessorChannel,
+			End:              make(chan bool),
+		}
+		processor.Start(crobotsExecutable, opt, tot, result)
+		processors = append(processors, processor) // stores processor
+	}
+
+	// start collector
+	go func() {
+		for {
+			select {
+			case <-end:
+				for _, p := range processors {
+					p.Stop() // stop processor
+				}
+				return
+			case process := <-input:
+				processor := <-ProcessorChannel // wait for available channel
+				processor <- process            // dispatch process to processor
+			}
+		}
+	}()
+
+	return collector
 }
 
 type tournamentConfig struct {
@@ -120,7 +203,35 @@ func generateCombinations(list []string, size int) <-chan match {
 			log.Fatal("Invalid size", size)
 		}
 	}(c)
-	return c // Return the channel to the calling function
+	return c
+}
+
+func printRobots(tot int, result *sync.Map) {
+	var bots []count.Robot
+
+	result.Range(func(key interface{}, value interface{}) bool {
+		r, _ := result.Load(key)
+		robot := r.(count.Robot)
+		if robot.Games > 0 {
+			ties := 0
+			for _, v := range robot.Ties {
+				ties += v
+			}
+			robot.Points = robot.Wins*tot + ties
+			robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
+		}
+		bots = append(bots, robot)
+		return true
+	})
+	sort.SliceStable(bots, func(i, j int) bool {
+		return bots[i].Eff > bots[j].Eff
+	})
+	var i int = 0
+	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%")
+	for _, robot := range bots {
+		i++
+		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+	}
 }
 
 func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
@@ -137,29 +248,28 @@ func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	return nil
 }
 
-func printRobots(tot int, result map[string]count.Robot) {
-	var bots []count.Robot
-
-	for _, robot := range result {
-
-		if robot.Games > 0 {
-			ties := 0
-			for _, v := range robot.Ties {
-				ties += v
-			}
-			robot.Points = robot.Wins*tot + ties
-			robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
-		}
-		bots = append(bots, robot)
+func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result *sync.Map) {
+	var out bytes.Buffer
+	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
 	}
-	sort.SliceStable(bots, func(i, j int) bool {
-		return bots[i].Eff > bots[j].Eff
-	})
-	var i int = 0
-	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%")
-	for _, robot := range bots {
-		i++
-		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+	partial := count.ParseLogs(strings.Split(out.String(), "\n"))
+	for _, robot := range partial {
+		name := robot.Name
+		if u, found := result.Load(name); found {
+			update := u.(count.Robot)
+			update.Games += robot.Games
+			update.Wins += robot.Wins
+			update.Ties[0] += robot.Ties[0]
+			update.Ties[1] += robot.Ties[1]
+			update.Ties[2] += robot.Ties[2]
+			result.Store(name, count.Robot{Name: name, Games: update.Games, Wins: update.Wins, Ties: update.Ties, Points: 0, Eff: 0.0})
+		} else {
+			result.Store(name, count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0})
+		}
 	}
 }
 
@@ -184,8 +294,12 @@ func main() {
 	if *parseLog != "" {
 		content := logToString(*parseLog)
 		result := count.ParseLogs(strings.Split(content, "\n"))
+		var syncResult sync.Map
+		for k, v := range result {
+			syncResult.Store(k, v)
+		}
 
-		printRobots(tot, result)
+		printRobots(tot, &syncResult)
 		return
 	}
 
@@ -231,31 +345,14 @@ func main() {
 	}
 	log.Println("Start processing...")
 	start := time.Now()
-	result := make(map[string]count.Robot)
+	var result sync.Map
+	var i int
+	collector := StartDispatcher(NumCPU, *crobotsExecutable, opt, tot, &result)
 	for r := range generateCombinations(robots, tot) {
-		var out bytes.Buffer
-		cmd := r.executeCrobotsMatch(*crobotsExecutable, opt, tot)
-		cmd.Stdout = &out
-		err := cmd.Run()
-		if err != nil {
-			log.Fatal(err)
-		}
-		partial := count.ParseLogs(strings.Split(out.String(), "\n"))
-		for _, robot := range partial {
-			name := robot.Name
-			if update, found := result[name]; found {
-				update.Games += robot.Games
-				update.Wins += robot.Wins
-				update.Ties[0] += robot.Ties[0]
-				update.Ties[1] += robot.Ties[1]
-				update.Ties[2] += robot.Ties[2]
-				result[name] = count.Robot{Name: name, Games: update.Games, Wins: update.Wins, Ties: update.Ties, Points: 0, Eff: 0.0}
-			} else {
-				result[name] = count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
-			}
-		}
+		i++
+		collector.Process <- process{ID: i, Match: r}
 	}
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
-	printRobots(tot, result)
+	printRobots(tot, &result)
 }
