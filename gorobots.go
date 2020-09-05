@@ -167,6 +167,7 @@ func main() {
 
 	log.Println("GoRobots", Version)
 	log.Println("Detected CPU(s)/core(s):", NumCPU)
+	runtime.GOMAXPROCS(NumCPU)
 	tournamentType := flag.String("type", "", "tournament type: f2f, 3vs3 or 4vs4")
 	configFile := flag.String("config", "config.yml", "YAML configuration file")
 	parseLog := flag.String("parse", "", "parse log file")
