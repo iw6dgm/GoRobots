@@ -1,6 +1,6 @@
 label: test
-matchF2F: 1000
-match3VS3: 100
-match4VS4: 10
+matchF2F: 10000
+match3VS3: 1000
+match4VS4: 100
 sourcePath: 'C:\Users\Heuristik\crobots\crobs'
 listRobots: ['leader', 'sentry', 'politik', 'rambo3', 'leavy', 'cspotrun']
