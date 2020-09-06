@@ -20,7 +20,7 @@ import (
 
 const (
 	// Version is the software version format v#.##-timestamp
-	Version = "v1.11-20200906"
+	Version = "v1.2-20200906"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -119,6 +119,36 @@ func generateCombinations(list []string, size int, c chan<- match) {
 	}
 }
 
+func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- match) {
+	tot := len(list)
+	switch size {
+	case 2:
+		for i := 0; i < tot-1; i++ {
+			c <- match{Robots: []string{list[i], robot}}
+		}
+	case 3:
+		for i := 0; i < tot-2; i++ {
+			for j := i + 1; j < tot-1; j++ {
+				c <- match{Robots: []string{list[i], list[j], robot}}
+			}
+		}
+	case 4:
+		for i := 0; i < tot-3; i++ {
+			for j := i + 1; j < tot-2; j++ {
+				for k := j + 1; k < tot-1; k++ {
+					c <- match{Robots: []string{list[i], list[j], list[k], robot}}
+				}
+			}
+		}
+	default:
+		log.Fatal("Invalid size", size)
+	}
+}
+
+func generateRandomCombinations(list []string, c chan<- match) {
+
+}
+
 func printRobots(tot int, result *sync.Map) {
 	var bots []count.Robot
 
@@ -193,6 +223,26 @@ func worker(id int, matches <-chan match, crobotsExecutable string, opt string, 
 	}
 }
 
+func checkAndCompile(r string, crobotsExecutable string, path func(r string) string) string {
+	t := path(r) + RobotBinaryExt
+	if !fileExists(t) {
+		log.Println("Binary robot cannot be found:", t, "Trying to compile source code")
+		s := path(r) + RobotSourceExt
+		if fileExists(s) {
+			var out bytes.Buffer
+			cmd := exec.Command(crobotsExecutable, "-c", s)
+			cmd.Stdout = &out
+			err := cmd.Run()
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			log.Fatal("Robot source code cannot be found: ", s)
+		}
+	}
+	return t
+}
+
 func main() {
 
 	log.Println("GoRobots", Version)
@@ -200,8 +250,12 @@ func main() {
 	runtime.GOMAXPROCS(NumCPU)
 	tournamentType := flag.String("type", "", "tournament type: f2f, 3vs3 or 4vs4")
 	configFile := flag.String("config", "config.yml", "YAML configuration file")
-	parseLog := flag.String("parse", "", "parse log file")
+	parseLog := flag.String("parse", "", "parse log file only (no tournament)")
 	crobotsExecutable := flag.String("exe", "crobots", "Crobots executable")
+	benchRobot := flag.String("bench", "", "robot (full path, no extension) to create a benchmark tournament for")
+	testMode := flag.Bool("test", false, "test mode, check configuration and exit")
+	randomMode := flag.Bool("random", false, "generate random matches (4vs4 only)")
+	limit := flag.Int("limit", 0, "limit random numer of matches (random mode only)")
 
 	flag.Parse()
 
@@ -223,6 +277,20 @@ func main() {
 		return
 	}
 
+	if *randomMode {
+		if tot != 4 {
+			log.Fatal("Random mode supported for 4vs4 only")
+		}
+
+		if *limit <= 0 {
+			log.Fatal("Limit missing or invalid in random mode ", *limit)
+		}
+	} else {
+		if *limit != 0 {
+			log.Println("Limit ignored in non-random  mode")
+		}
+	}
+
 	config := loadConfig(*configFile)
 	listSize := len(config.ListRobots)
 	if listSize < tot {
@@ -232,25 +300,22 @@ func main() {
 	var robots []string
 
 	for _, r := range config.ListRobots {
-		t := config.SourcePath + Separator + r + RobotBinaryExt
-
-		if !fileExists(t) {
-			log.Println("Binary robot cannot be found. Try to compile source code:", t)
-			s := config.SourcePath + Separator + r + RobotSourceExt
-			if fileExists(s) {
-				var out bytes.Buffer
-				cmd := exec.Command(*crobotsExecutable, "-c", s)
-				cmd.Stdout = &out
-				err := cmd.Run()
-				if err != nil {
-					log.Fatal(err)
-				}
-			} else {
-				log.Fatal("Robot source code cannot be found:", s)
-			}
-		}
+		t := checkAndCompile(r, *crobotsExecutable, func(r string) string {
+			return config.SourcePath + Separator + r
+		})
 
 		robots = append(robots, t)
+	}
+
+	if *benchRobot != "" {
+		checkAndCompile(*benchRobot, *crobotsExecutable, func(r string) string {
+			return r
+		})
+	}
+
+	if *testMode {
+		log.Println("Test mode completed. Exit.")
+		return
 	}
 
 	var opt string
@@ -271,7 +336,11 @@ func main() {
 		wg.Add(1)
 		go worker(w, jobs, *crobotsExecutable, opt, tot, &result, &wg)
 	}
-	generateCombinations(robots, tot, jobs)
+	if *benchRobot != "" {
+		generateCombinationsForBenchmark(*benchRobot+RobotBinaryExt, robots, tot, jobs)
+	} else {
+		generateCombinations(robots, tot, jobs)
+	}
 	close(jobs)
 	wg.Wait()
 	duration := time.Since(start)
