@@ -1,13 +1,8 @@
 package count
 
 import (
-	"os"
+	"path/filepath"
 	"strings"
-)
-
-const (
-	// Separator OS dependent path separator
-	Separator = string(os.PathSeparator)
 )
 
 // Robot structure
@@ -21,28 +16,22 @@ type Robot struct {
 }
 
 func getName(s string) string {
-	v := strings.Trim(s, " ")
-
-	if strings.HasPrefix(v, Separator) {
-		return v[1 : len(v)-1]
-	}
-
-	return v
+	return strings.Split(filepath.Base(strings.Trim(s, " ")), ".")[0]
 }
 
-func getSurvivor(s string) Robot {
-	return Robot{Name: getName(s[8:19]), Wins: 0, Ties: []int{0, 0, 0}}
+func getSurvivor(s string) *Robot {
+	return &Robot{Name: getName(s[8:19]), Wins: 0, Ties: []int{0, 0, 0}}
 }
 
-func getRobot(s string, robots map[string]Robot) Robot {
+func getRobot(s string, robots map[string]*Robot) *Robot {
 	n := getName(s[8:19])
 	if r, ok := robots[n]; ok {
 		return r
 	}
-	return Robot{Name: n, Ties: []int{0, 0, 0}}
+	return &Robot{Name: n, Ties: []int{0, 0, 0}}
 }
 
-func updateRobot(s string, survivors map[string]Robot, robots map[string]Robot) {
+func updateRobot(s string, survivors map[string]*Robot, robots map[string]*Robot) {
 	r := getRobot(s, robots)
 	n := r.Name
 	if s, ok := survivors[n]; ok {
@@ -55,15 +44,16 @@ func updateRobot(s string, survivors map[string]Robot, robots map[string]Robot) 
 	robots[n] = r
 }
 
-func updateSurvivor(s string, survivors map[string]Robot) {
+func updateSurvivor(s string, survivors map[string]*Robot) {
 	surv := getSurvivor(s)
 	survivors[surv.Name] = surv
 }
 
-func ParseLogs(lines []string) map[string]Robot {
+// ParseLogs returns a log parsed into a map of robots
+func ParseLogs(lines []string) map[string]*Robot {
 
-	robots := make(map[string]Robot)
-	survivors := make(map[string]Robot)
+	robots := make(map[string]*Robot)
+	survivors := make(map[string]*Robot)
 
 	for _, line := range lines {
 
@@ -74,7 +64,7 @@ func ParseLogs(lines []string) map[string]Robot {
 		}
 
 		if strings.HasPrefix(line, "Match") {
-			survivors = make(map[string]Robot)
+			survivors = make(map[string]*Robot)
 		} else if strings.Index(line, "damage=%") != -1 {
 			if l < 50 {
 				updateSurvivor(line, survivors)
@@ -96,15 +86,13 @@ func ParseLogs(lines []string) map[string]Robot {
 			case 0:
 				continue
 			case 1:
-				for key, value := range survivors {
+				for _, value := range survivors {
 					value.Wins = 1
-					survivors[key] = value
 				}
 			default:
 				i := s - 2
-				for key, value := range survivors {
+				for _, value := range survivors {
 					value.Ties[i] = 1
-					survivors[key] = value
 				}
 			}
 		} else if strings.Index(line, "wins=") != -1 {

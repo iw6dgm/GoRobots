@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -20,7 +21,7 @@ import (
 
 const (
 	// Version is the software version format v#.##-timestamp
-	Version = "v1.2-20200906"
+	Version = "v1.21-20200906"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -36,6 +37,11 @@ var (
 
 type match struct {
 	Robots []string
+}
+
+type result struct {
+	m sync.Mutex
+	r map[string]count.Robot
 }
 
 type tournamentConfig struct {
@@ -145,16 +151,10 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 	}
 }
 
-func generateRandomCombinations(list []string, c chan<- match) {
-
-}
-
-func printRobots(tot int, result *sync.Map) {
+func printRobots(tot int, result map[string]*count.Robot) {
 	var bots []count.Robot
 
-	result.Range(func(key interface{}, value interface{}) bool {
-		r, _ := result.Load(key)
-		robot := r.(count.Robot)
+	for _, robot := range result {
 		if robot.Games > 0 {
 			ties := 0
 			for _, v := range robot.Ties {
@@ -163,9 +163,8 @@ func printRobots(tot int, result *sync.Map) {
 			robot.Points = robot.Wins*tot + ties
 			robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
 		}
-		bots = append(bots, robot)
-		return true
-	})
+		bots = append(bots, *robot)
+	}
 	sort.SliceStable(bots, func(i, j int) bool {
 		return bots[i].Eff > bots[j].Eff
 	})
@@ -191,7 +190,7 @@ func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	return nil
 }
 
-func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result *sync.Map) {
+func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result map[string]*count.Robot, mutex *sync.Mutex) {
 	var out bytes.Buffer
 	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
 	cmd.Stdout = &out
@@ -202,24 +201,25 @@ func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int
 	partial := count.ParseLogs(strings.Split(out.String(), "\n"))
 	for _, robot := range partial {
 		name := robot.Name
-		if u, found := result.Load(name); found {
-			update := u.(count.Robot)
-			update.Games += robot.Games
-			update.Wins += robot.Wins
-			update.Ties[0] += robot.Ties[0]
-			update.Ties[1] += robot.Ties[1]
-			update.Ties[2] += robot.Ties[2]
-			result.Store(name, count.Robot{Name: name, Games: update.Games, Wins: update.Wins, Ties: update.Ties, Points: 0, Eff: 0.0})
+		// sync.Map doesn't seem to work here
+		mutex.Lock()
+		if _, found := result[name]; found {
+			result[name].Games += robot.Games
+			result[name].Wins += robot.Wins
+			result[name].Ties[0] += robot.Ties[0]
+			result[name].Ties[1] += robot.Ties[1]
+			result[name].Ties[2] += robot.Ties[2]
 		} else {
-			result.Store(name, count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0})
+			result[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
 		}
+		mutex.Unlock()
 	}
 }
 
-func worker(id int, matches <-chan match, crobotsExecutable string, opt string, tot int, result *sync.Map, wg *sync.WaitGroup) {
+func worker(id int, matches <-chan match, crobotsExecutable string, opt string, tot int, result map[string]*count.Robot, mutex *sync.Mutex, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for m := range matches {
-		m.processCrobotsMatch(crobotsExecutable, opt, tot, result)
+		m.processCrobotsMatch(crobotsExecutable, opt, tot, result, mutex)
 	}
 }
 
@@ -268,12 +268,7 @@ func main() {
 	if *parseLog != "" {
 		content := logToString(*parseLog)
 		result := count.ParseLogs(strings.Split(content, "\n"))
-		var syncResult sync.Map
-		for k, v := range result {
-			syncResult.Store(k, v)
-		}
-
-		printRobots(tot, &syncResult)
+		printRobots(tot, result)
 		return
 	}
 
@@ -283,11 +278,11 @@ func main() {
 		}
 
 		if *limit <= 0 {
-			log.Fatal("Limit missing or invalid in random mode ", *limit)
+			log.Fatal("Limit missing or invalid in random mode: ", *limit)
 		}
 	} else {
 		if *limit != 0 {
-			log.Println("Limit ignored in non-random  mode")
+			log.Println("Limit ignored in non-random mode")
 		}
 	}
 
@@ -314,7 +309,7 @@ func main() {
 	}
 
 	if *testMode {
-		log.Println("Test mode completed. Exit.")
+		log.Println("Test mode completed. Exit")
 		return
 	}
 
@@ -329,15 +324,38 @@ func main() {
 	}
 	log.Println("Start processing...")
 	start := time.Now()
-	var result sync.Map
+	result := make(map[string]*count.Robot)
 	jobs := make(chan match, NumCPU)
 	var wg sync.WaitGroup
+	var mutex sync.Mutex
 	for w := 1; w <= NumCPU; w++ {
 		wg.Add(1)
-		go worker(w, jobs, *crobotsExecutable, opt, tot, &result, &wg)
+		go worker(w, jobs, *crobotsExecutable, opt, tot, result, &mutex, &wg)
 	}
+
+	var br string = ""
 	if *benchRobot != "" {
-		generateCombinationsForBenchmark(*benchRobot+RobotBinaryExt, robots, tot, jobs)
+		br = *benchRobot + RobotBinaryExt
+		log.Println("Benchmark tournament for", br)
+	}
+
+	if *randomMode {
+		l := *limit
+		log.Println("Random mode enable. Limit", l)
+
+		for i := 0; i < l; i++ {
+			rand.Seed(time.Now().UnixNano())
+			perm := rand.Perm(listSize)
+			if br != "" {
+				a, b, c := perm[0], perm[1], perm[2]
+				jobs <- match{Robots: []string{robots[a], robots[b], robots[c], br}}
+			} else {
+				a, b, c, d := perm[0], perm[1], perm[2], perm[3]
+				jobs <- match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
+			}
+		}
+	} else if br != "" {
+		generateCombinationsForBenchmark(br, robots, tot, jobs)
 	} else {
 		generateCombinations(robots, tot, jobs)
 	}
@@ -345,5 +363,5 @@ func main() {
 	wg.Wait()
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
-	printRobots(tot, &result)
+	printRobots(tot, result)
 }

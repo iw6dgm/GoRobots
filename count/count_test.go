@@ -3,12 +3,13 @@ package count
 import (
 	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 	"testing"
 )
 
 const (
-	robotName = `   (2)     /jedi13.r: damage=% 60  `
+	robotName = `   (2)     ` + string(os.PathSeparator) + `jedi13.r: damage=% 60  `
 )
 
 func TestGetName(t *testing.T) {
@@ -35,20 +36,20 @@ func TestParseLog(t *testing.T) {
 		t.Errorf("Error while parsing logs; want 4, got %d, result = %v+", l, result)
 	}
 
-	r1 := result["!"]
-	r2 := result["son-goku"]
-	r3 := result["1_1"]
-	r4 := result["null"]
+	r1 := result["bouncer"]
+	r2 := result["rook"]
+	r3 := result["leader"]
+	r4 := result["rabbit"]
 
 	if r1.Games != 10 || r2.Games != 10 || r3.Games != 10 || r4.Games != 10 {
 		t.Errorf("Invalid games count; want 10 10 10 10, got %d %d %d %d ", r1.Games, r2.Games, r3.Games, r4.Games)
 	}
 
-	if r1.Wins != 3 || r2.Wins != 5 || r3.Wins != 1 || r4.Wins != 0 {
+	if r1.Wins != 0 || r2.Wins != 0 || r3.Wins != 10 || r4.Wins != 0 {
 		t.Errorf("Invalid wins count; want 3 5 1 0, got %d %d %d %d ", r1.Wins, r2.Wins, r3.Wins, r4.Wins)
 	}
 
-	if r1.Ties[0] != 0 || r2.Ties[0] != 1 || r3.Ties[0] != 1 || r4.Ties[0] != 0 {
+	if r1.Ties[0] != 0 || r2.Ties[0] != 0 || r3.Ties[0] != 0 || r4.Ties[0] != 0 {
 		t.Errorf("Invalid ties2 count; want 0 1 1 0, got %d %d %d %d ", r1.Ties[0], r2.Ties[0], r3.Ties[0], r4.Ties[0])
 	}
 
