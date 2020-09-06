@@ -91,24 +91,24 @@ func generateCombinations(list []string, size int, c chan<- match) {
 	tot := len(list)
 	switch size {
 	case 2:
-		for i := 0; i < tot-2; i++ {
-			for j := i + 1; j < tot-1; j++ {
+		for i := 0; i < tot-1; i++ {
+			for j := i + 1; j < tot; j++ {
 				c <- match{Robots: []string{list[i], list[j]}}
 			}
 		}
 	case 3:
-		for i := 0; i < tot-3; i++ {
-			for j := i + 1; j < tot-2; j++ {
-				for k := j + 1; k < tot-1; k++ {
+		for i := 0; i < tot-2; i++ {
+			for j := i + 1; j < tot-1; j++ {
+				for k := j + 1; k < tot; k++ {
 					c <- match{Robots: []string{list[i], list[j], list[k]}}
 				}
 			}
 		}
 	case 4:
-		for i := 0; i < tot-4; i++ {
-			for j := i + 1; j < tot-3; j++ {
-				for k := j + 1; k < tot-2; k++ {
-					for z := k + 1; z < tot-1; z++ {
+		for i := 0; i < tot-3; i++ {
+			for j := i + 1; j < tot-2; j++ {
+				for k := j + 1; k < tot-1; k++ {
+					for z := k + 1; z < tot; z++ {
 						c <- match{Robots: []string{list[i], list[j], list[k], list[z]}}
 					}
 				}
@@ -225,7 +225,6 @@ func main() {
 
 	config := loadConfig(*configFile)
 	listSize := len(config.ListRobots)
-
 	if listSize < tot {
 		log.Fatal("Robot list insufficient!")
 	}
