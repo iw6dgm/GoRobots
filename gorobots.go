@@ -20,7 +20,7 @@ import (
 
 const (
 	// Version is the software version format v#.##-timestamp
-	Version = "v1.1-20200905"
+	Version = "v1.11-20200906"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
