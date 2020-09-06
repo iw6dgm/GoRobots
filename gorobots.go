@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -19,7 +20,7 @@ import (
 
 const (
 	// Version is the software version format v#.##-timestamp
-	Version = "v1.0-20200904"
+	Version = "v1.1-20200905"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -29,7 +30,7 @@ const (
 )
 
 var (
-	// NumCPU is the number of detected CPU/cores
+	// NumCPU is the number of detected CPUs/cores
 	NumCPU int = runtime.NumCPU()
 )
 
@@ -86,41 +87,64 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
-func generateCombinations(list []string, size int) <-chan match {
-	c := make(chan match)
+func generateCombinations(list []string, size int, c chan<- match) {
 	tot := len(list)
-	go func(c chan match) {
-		defer close(c)
-		switch size {
-		case 2:
-			for i := 0; i < tot-2; i++ {
-				for j := i + 1; j < tot-1; j++ {
-					c <- match{Robots: []string{list[i], list[j]}}
-				}
+	switch size {
+	case 2:
+		for i := 0; i < tot-1; i++ {
+			for j := i + 1; j < tot; j++ {
+				c <- match{Robots: []string{list[i], list[j]}}
 			}
-		case 3:
-			for i := 0; i < tot-3; i++ {
-				for j := i + 1; j < tot-2; j++ {
-					for k := j + 1; k < tot-1; k++ {
-						c <- match{Robots: []string{list[i], list[j], list[k]}}
-					}
-				}
-			}
-		case 4:
-			for i := 0; i < tot-4; i++ {
-				for j := i + 1; j < tot-3; j++ {
-					for k := j + 1; k < tot-2; k++ {
-						for z := k + 1; z < tot-1; z++ {
-							c <- match{Robots: []string{list[i], list[j], list[k], list[z]}}
-						}
-					}
-				}
-			}
-		default:
-			log.Fatal("Invalid size", size)
 		}
-	}(c)
-	return c // Return the channel to the calling function
+	case 3:
+		for i := 0; i < tot-2; i++ {
+			for j := i + 1; j < tot-1; j++ {
+				for k := j + 1; k < tot; k++ {
+					c <- match{Robots: []string{list[i], list[j], list[k]}}
+				}
+			}
+		}
+	case 4:
+		for i := 0; i < tot-3; i++ {
+			for j := i + 1; j < tot-2; j++ {
+				for k := j + 1; k < tot-1; k++ {
+					for z := k + 1; z < tot; z++ {
+						c <- match{Robots: []string{list[i], list[j], list[k], list[z]}}
+					}
+				}
+			}
+		}
+	default:
+		log.Fatal("Invalid size", size)
+	}
+}
+
+func printRobots(tot int, result *sync.Map) {
+	var bots []count.Robot
+
+	result.Range(func(key interface{}, value interface{}) bool {
+		r, _ := result.Load(key)
+		robot := r.(count.Robot)
+		if robot.Games > 0 {
+			ties := 0
+			for _, v := range robot.Ties {
+				ties += v
+			}
+			robot.Points = robot.Wins*tot + ties
+			robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
+		}
+		bots = append(bots, robot)
+		return true
+	})
+	sort.SliceStable(bots, func(i, j int) bool {
+		return bots[i].Eff > bots[j].Eff
+	})
+	var i int = 0
+	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%")
+	for _, robot := range bots {
+		i++
+		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+	}
 }
 
 func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
@@ -137,29 +161,35 @@ func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	return nil
 }
 
-func printRobots(tot int, result map[string]count.Robot) {
-	var bots []count.Robot
-
-	for _, robot := range result {
-
-		if robot.Games > 0 {
-			ties := 0
-			for _, v := range robot.Ties {
-				ties += v
-			}
-			robot.Points = robot.Wins*tot + ties
-			robot.Eff = 100.0 * float32(robot.Points) / float32(tot*robot.Games)
-		}
-		bots = append(bots, robot)
+func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result *sync.Map) {
+	var out bytes.Buffer
+	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
 	}
-	sort.SliceStable(bots, func(i, j int) bool {
-		return bots[i].Eff > bots[j].Eff
-	})
-	var i int = 0
-	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%")
-	for _, robot := range bots {
-		i++
-		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+	partial := count.ParseLogs(strings.Split(out.String(), "\n"))
+	for _, robot := range partial {
+		name := robot.Name
+		if u, found := result.Load(name); found {
+			update := u.(count.Robot)
+			update.Games += robot.Games
+			update.Wins += robot.Wins
+			update.Ties[0] += robot.Ties[0]
+			update.Ties[1] += robot.Ties[1]
+			update.Ties[2] += robot.Ties[2]
+			result.Store(name, count.Robot{Name: name, Games: update.Games, Wins: update.Wins, Ties: update.Ties, Points: 0, Eff: 0.0})
+		} else {
+			result.Store(name, count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0})
+		}
+	}
+}
+
+func worker(id int, matches <-chan match, crobotsExecutable string, opt string, tot int, result *sync.Map, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for m := range matches {
+		m.processCrobotsMatch(crobotsExecutable, opt, tot, result)
 	}
 }
 
@@ -184,14 +214,17 @@ func main() {
 	if *parseLog != "" {
 		content := logToString(*parseLog)
 		result := count.ParseLogs(strings.Split(content, "\n"))
+		var syncResult sync.Map
+		for k, v := range result {
+			syncResult.Store(k, v)
+		}
 
-		printRobots(tot, result)
+		printRobots(tot, &syncResult)
 		return
 	}
 
 	config := loadConfig(*configFile)
 	listSize := len(config.ListRobots)
-
 	if listSize < tot {
 		log.Fatal("Robot list insufficient!")
 	}
@@ -231,31 +264,17 @@ func main() {
 	}
 	log.Println("Start processing...")
 	start := time.Now()
-	result := make(map[string]count.Robot)
-	for r := range generateCombinations(robots, tot) {
-		var out bytes.Buffer
-		cmd := r.executeCrobotsMatch(*crobotsExecutable, opt, tot)
-		cmd.Stdout = &out
-		err := cmd.Run()
-		if err != nil {
-			log.Fatal(err)
-		}
-		partial := count.ParseLogs(strings.Split(out.String(), "\n"))
-		for _, robot := range partial {
-			name := robot.Name
-			if update, found := result[name]; found {
-				update.Games += robot.Games
-				update.Wins += robot.Wins
-				update.Ties[0] += robot.Ties[0]
-				update.Ties[1] += robot.Ties[1]
-				update.Ties[2] += robot.Ties[2]
-				result[name] = count.Robot{Name: name, Games: update.Games, Wins: update.Wins, Ties: update.Ties, Points: 0, Eff: 0.0}
-			} else {
-				result[name] = count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
-			}
-		}
+	var result sync.Map
+	jobs := make(chan match, NumCPU)
+	var wg sync.WaitGroup
+	for w := 1; w <= NumCPU; w++ {
+		wg.Add(1)
+		go worker(w, jobs, *crobotsExecutable, opt, tot, &result, &wg)
 	}
+	generateCombinations(robots, tot, jobs)
+	close(jobs)
+	wg.Wait()
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
-	printRobots(tot, result)
+	printRobots(tot, &result)
 }
