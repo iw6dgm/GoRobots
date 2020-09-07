@@ -2,6 +2,7 @@ package main
 
 import (
 	"GoRobots/count"
+	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
@@ -21,13 +22,17 @@ import (
 
 const (
 	// Version is the software version format v#.##-timestamp
-	Version = "v1.21-20200906"
+	Version = "v1.22-20200907"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
 	RobotBinaryExt = ".ro"
 	// RobotSourceExt is the file extension of the robot source code
 	RobotSourceExt = ".r"
+	// Header is the output header
+	Header = "#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%"
+	// OutputFormat is a single row output format
+	OutputFormat = "%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n"
 )
 
 var (
@@ -93,6 +98,12 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+// commandExists checks if an executable exists
+func commandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
+}
+
 func generateCombinations(list []string, size int, c chan<- match) {
 	tot := len(list)
 	switch size {
@@ -151,7 +162,15 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 	}
 }
 
-func printRobots(tot int, result map[string]*count.Robot) {
+func check(err error) bool {
+	if err != nil {
+		log.Println(err)
+		return true
+	}
+	return false
+}
+
+func printRobots(out *string, tot int, result map[string]*count.Robot) {
 	var bots []count.Robot
 
 	for _, robot := range result {
@@ -168,11 +187,40 @@ func printRobots(tot int, result map[string]*count.Robot) {
 	sort.SliceStable(bots, func(i, j int) bool {
 		return bots[i].Eff > bots[j].Eff
 	})
-	var i int = 0
-	fmt.Println("#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%")
-	for _, robot := range bots {
-		i++
-		fmt.Printf("%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n", i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+	printToStd := func() {
+		var i int = 0
+		fmt.Println(Header)
+		for _, robot := range bots {
+			i++
+			fmt.Printf(OutputFormat, i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+		}
+	}
+	if *out != "" {
+		outputFile := *out
+		f, err := os.Create(outputFile)
+		if check(err) {
+			printToStd()
+			return
+		}
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		var i int = 0
+		_, err = fmt.Fprintln(w, Header)
+		if check(err) {
+			printToStd()
+			return
+		}
+		for _, robot := range bots {
+			i++
+			_, err = fmt.Fprintf(w, OutputFormat, i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
+			if check(err) {
+				printToStd()
+				return
+			}
+		}
+		w.Flush()
+	} else {
+		printToStd()
 	}
 }
 
@@ -256,6 +304,7 @@ func main() {
 	testMode := flag.Bool("test", false, "test mode, check configuration and exit")
 	randomMode := flag.Bool("random", false, "generate random matches (4vs4 only)")
 	limit := flag.Int("limit", 0, "limit random numer of matches (random mode only)")
+	out := flag.String("out", "", "output report to file")
 
 	flag.Parse()
 
@@ -268,7 +317,7 @@ func main() {
 	if *parseLog != "" {
 		content := logToString(*parseLog)
 		result := count.ParseLogs(strings.Split(content, "\n"))
-		printRobots(tot, result)
+		printRobots(out, tot, result)
 		return
 	}
 
@@ -313,6 +362,12 @@ func main() {
 		return
 	}
 
+	crobots := *crobotsExecutable
+
+	if !commandExists(crobots) {
+		log.Fatal("Crobots executable not found: ", crobots)
+	}
+
 	var opt string
 	switch tot {
 	case 2:
@@ -330,7 +385,7 @@ func main() {
 	var mutex sync.Mutex
 	for w := 1; w <= NumCPU; w++ {
 		wg.Add(1)
-		go worker(w, jobs, *crobotsExecutable, opt, tot, result, &mutex, &wg)
+		go worker(w, jobs, crobots, opt, tot, result, &mutex, &wg)
 	}
 
 	var br string = ""
@@ -363,5 +418,5 @@ func main() {
 	wg.Wait()
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
-	printRobots(tot, result)
+	printRobots(out, tot, result)
 }
