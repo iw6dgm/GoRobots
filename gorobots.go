@@ -303,7 +303,7 @@ func main() {
 	benchRobot := flag.String("bench", "", "robot (full path, no extension) to create a benchmark tournament for")
 	testMode := flag.Bool("test", false, "test mode, check configuration and exit")
 	randomMode := flag.Bool("random", false, "generate random matches (4vs4 only)")
-	limit := flag.Int("limit", 0, "limit random numer of matches (random mode only)")
+	limit := flag.Int("limit", 0, "limit random number of matches (random mode only)")
 	out := flag.String("out", "", "output report to file")
 
 	flag.Parse()
