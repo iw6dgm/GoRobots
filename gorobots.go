@@ -22,7 +22,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.2.3-20200909"
+	Version = "v1.2.4-20200909"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -40,13 +40,15 @@ var (
 	NumCPU int = runtime.NumCPU()
 )
 
-type match struct {
+// Match holds a list of robots for a single crobots match
+type Match struct {
 	Robots []string
 }
 
-type result struct {
-	m sync.Mutex
-	r map[string]count.Robot
+// Result holds a single crobots results and a Mutex
+type Result struct {
+	Mutex  *sync.Mutex
+	Robots map[string]*count.Robot
 }
 
 type tournamentConfig struct {
@@ -104,20 +106,20 @@ func commandExists(cmd string) bool {
 	return err == nil
 }
 
-func generateCombinations(list []string, size int, c chan<- match) {
+func generateCombinations(list []string, size int, c chan<- *Match) {
 	tot := len(list)
 	switch size {
 	case 2:
 		for i := 0; i < tot-1; i++ {
 			for j := i + 1; j < tot; j++ {
-				c <- match{Robots: []string{list[i], list[j]}}
+				c <- &Match{Robots: []string{list[i], list[j]}}
 			}
 		}
 	case 3:
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				for k := j + 1; k < tot; k++ {
-					c <- match{Robots: []string{list[i], list[j], list[k]}}
+					c <- &Match{Robots: []string{list[i], list[j], list[k]}}
 				}
 			}
 		}
@@ -126,7 +128,7 @@ func generateCombinations(list []string, size int, c chan<- match) {
 			for j := i + 1; j < tot-2; j++ {
 				for k := j + 1; k < tot-1; k++ {
 					for z := k + 1; z < tot; z++ {
-						c <- match{Robots: []string{list[i], list[j], list[k], list[z]}}
+						c <- &Match{Robots: []string{list[i], list[j], list[k], list[z]}}
 					}
 				}
 			}
@@ -136,24 +138,24 @@ func generateCombinations(list []string, size int, c chan<- match) {
 	}
 }
 
-func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- match) {
+func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- *Match) {
 	tot := len(list)
 	switch size {
 	case 2:
 		for i := 0; i < tot-1; i++ {
-			c <- match{Robots: []string{list[i], robot}}
+			c <- &Match{Robots: []string{list[i], robot}}
 		}
 	case 3:
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
-				c <- match{Robots: []string{list[i], list[j], robot}}
+				c <- &Match{Robots: []string{list[i], list[j], robot}}
 			}
 		}
 	case 4:
 		for i := 0; i < tot-3; i++ {
 			for j := i + 1; j < tot-2; j++ {
 				for k := j + 1; k < tot-1; k++ {
-					c <- match{Robots: []string{list[i], list[j], list[k], robot}}
+					c <- &Match{Robots: []string{list[i], list[j], list[k], robot}}
 				}
 			}
 		}
@@ -170,10 +172,10 @@ func check(err error) bool {
 	return false
 }
 
-func printRobots(out *string, tot int, result map[string]*count.Robot) {
+func printRobots(out *string, tot int, result *Result) {
 	var bots []count.Robot
 
-	for _, robot := range result {
+	for _, robot := range result.Robots {
 		if robot.Games > 0 {
 			ties := 0
 			for _, v := range robot.Ties {
@@ -224,7 +226,7 @@ func printRobots(out *string, tot int, result map[string]*count.Robot) {
 	}
 }
 
-func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
+func (m *Match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	switch n {
 	case 2:
 		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1])
@@ -238,7 +240,7 @@ func (m match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	return nil
 }
 
-func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result map[string]*count.Robot, mutex *sync.Mutex) {
+func (m *Match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result *Result) {
 	var out bytes.Buffer
 	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
 	cmd.Stdout = &out
@@ -250,31 +252,31 @@ func (m match) processCrobotsMatch(crobotsExecutable string, opt string, tot int
 	for _, robot := range partial {
 		name := robot.Name
 		// sync.Map doesn't seem to work here
-		mutex.Lock()
-		if _, found := result[name]; found {
-			result[name].Games += robot.Games
-			result[name].Wins += robot.Wins
-			result[name].Ties[0] += robot.Ties[0]
-			result[name].Ties[1] += robot.Ties[1]
-			result[name].Ties[2] += robot.Ties[2]
+		result.Mutex.Lock()
+		if update, found := result.Robots[name]; found {
+			update.Games += robot.Games
+			update.Wins += robot.Wins
+			update.Ties[0] += robot.Ties[0]
+			update.Ties[1] += robot.Ties[1]
+			update.Ties[2] += robot.Ties[2]
 		} else {
-			result[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
+			result.Robots[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
 		}
-		mutex.Unlock()
+		result.Mutex.Unlock()
 	}
 }
 
-func worker(id int, matches <-chan match, crobotsExecutable string, opt string, tot int, result map[string]*count.Robot, mutex *sync.Mutex, wg *sync.WaitGroup) {
+func worker(id int, matches <-chan *Match, crobotsExecutable string, opt string, tot int, result *Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for m := range matches {
-		m.processCrobotsMatch(crobotsExecutable, opt, tot, result, mutex)
+		m.processCrobotsMatch(crobotsExecutable, opt, tot, result)
 	}
 }
 
 func checkAndCompile(r string, crobotsExecutable string, path func(r string) string) string {
 	t := path(r) + RobotBinaryExt
 	if !fileExists(t) {
-		log.Println("Binary robot cannot be found:", t, "Trying to compile source code")
+		log.Println("Binary robot cannot be found:", t, ". Trying to compile source code")
 		s := path(r) + RobotSourceExt
 		if fileExists(s) {
 			var out bytes.Buffer
@@ -316,7 +318,7 @@ func main() {
 		NumCPU = c
 	}
 
-	log.Println("Using CPU(s)/core(s):", NumCPU)
+	log.Println("Going to use", NumCPU, "CPU(s)/core(s)")
 	runtime.GOMAXPROCS(NumCPU)
 
 	if _, ok := schema[*tournamentType]; !ok {
@@ -327,7 +329,7 @@ func main() {
 
 	if *parseLog != "" {
 		content := logToString(*parseLog)
-		result := count.ParseLogs(strings.Split(content, "\n"))
+		result := &Result{Robots: count.ParseLogs(strings.Split(content, "\n"))}
 		printRobots(out, tot, result)
 		return
 	}
@@ -368,15 +370,15 @@ func main() {
 		})
 	}
 
-	if *testMode {
-		log.Println("Test mode completed. Exit")
-		return
-	}
-
 	crobots := *crobotsExecutable
 
 	if !commandExists(crobots) {
 		log.Fatal("Crobots executable not found: ", crobots)
+	}
+
+	if *testMode {
+		log.Println("Test mode completed. Exit")
+		return
 	}
 
 	var opt string
@@ -390,13 +392,14 @@ func main() {
 	}
 	log.Println("Start processing...")
 	start := time.Now()
-	result := make(map[string]*count.Robot)
-	jobs := make(chan match, NumCPU)
-	var wg sync.WaitGroup
 	var mutex sync.Mutex
+	result := &Result{Robots: make(map[string]*count.Robot), Mutex: &mutex}
+	jobs := make(chan *Match, NumCPU)
+	var wg sync.WaitGroup
+
 	for w := 1; w <= NumCPU; w++ {
 		wg.Add(1)
-		go worker(w, jobs, crobots, opt, tot, result, &mutex, &wg)
+		go worker(w, jobs, crobots, opt, tot, result, &wg)
 	}
 
 	var br string = ""
@@ -414,10 +417,10 @@ func main() {
 			perm := rand.Perm(listSize)
 			if br != "" {
 				a, b, c := perm[0], perm[1], perm[2]
-				jobs <- match{Robots: []string{robots[a], robots[b], robots[c], br}}
+				jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], br}}
 			} else {
 				a, b, c, d := perm[0], perm[1], perm[2], perm[3]
-				jobs <- match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
+				jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
 			}
 			l--
 		}
