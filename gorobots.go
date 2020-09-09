@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	// Version is the software version format v#.##-timestamp
-	Version = "v1.22-20200907"
+	// Version is the software version format v#.#.#-timestamp
+	Version = "v1.2.3-20200909"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -295,7 +295,6 @@ func main() {
 
 	log.Println("GoRobots", Version)
 	log.Println("Detected CPU(s)/core(s):", NumCPU)
-	runtime.GOMAXPROCS(NumCPU)
 	tournamentType := flag.String("type", "", "tournament type: f2f, 3vs3 or 4vs4")
 	configFile := flag.String("config", "config.yml", "YAML configuration file")
 	parseLog := flag.String("parse", "", "parse log file only (no tournament)")
@@ -305,8 +304,20 @@ func main() {
 	randomMode := flag.Bool("random", false, "generate random matches (4vs4 only)")
 	limit := flag.Int("limit", 0, "limit random number of matches (random mode only)")
 	out := flag.String("out", "", "output report to file")
+	cpu := flag.Int("cpu", NumCPU, "number of threads (CPUs/cores)")
 
 	flag.Parse()
+
+	c := *cpu
+
+	if c < 1 || c > NumCPU {
+		log.Println("Invalid parameter cpu", c, ". Using default", NumCPU)
+	} else {
+		NumCPU = c
+	}
+
+	log.Println("Using CPU(s)/core(s):", NumCPU)
+	runtime.GOMAXPROCS(NumCPU)
 
 	if _, ok := schema[*tournamentType]; !ok {
 		log.Fatalln("Invalid tournament type: ", *tournamentType)
@@ -398,7 +409,7 @@ func main() {
 		l := *limit
 		log.Println("Random mode enable. Limit", l)
 
-		for i := 0; i < l; i++ {
+		for l > 0 {
 			rand.Seed(time.Now().UnixNano())
 			perm := rand.Perm(listSize)
 			if br != "" {
@@ -408,6 +419,7 @@ func main() {
 				a, b, c, d := perm[0], perm[1], perm[2], perm[3]
 				jobs <- match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
 			}
+			l--
 		}
 	} else if br != "" {
 		generateCombinationsForBenchmark(br, robots, tot, jobs)
