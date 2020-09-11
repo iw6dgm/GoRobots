@@ -22,7 +22,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.2.4-20200909"
+	Version = "v1.3.0-20200911"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -33,6 +33,8 @@ const (
 	Header = "#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%"
 	// OutputFormat is a single row output format
 	OutputFormat = "%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n"
+	// StdMatchLimitCycles is the standard Crobots limit as number of cycles for a single match
+	StdMatchLimitCycles = "-l200000"
 )
 
 var (
@@ -51,6 +53,7 @@ type Result struct {
 	Robots map[string]*count.Robot
 }
 
+// tournament config from YAML file
 type tournamentConfig struct {
 	Label      string   `yaml:"label"`
 	MatchF2F   int      `yaml:"matchF2F"`
@@ -60,6 +63,7 @@ type tournamentConfig struct {
 	ListRobots []string `yaml:"listRobots"`
 }
 
+// tournament types (modes)
 var schema = map[string]int{"f2f": 2, "3vs3": 3, "4vs4": 4}
 
 func loadConfig(config string) tournamentConfig {
@@ -106,24 +110,74 @@ func commandExists(cmd string) bool {
 	return err == nil
 }
 
-func generateCombinations(list []string, size int, c chan<- *Match) {
+// Verbose helper to display tournament progression
+type Verbose struct {
+	Enabled  bool
+	TotComb  int
+	Counter  int
+	LastPerc int
+	Inc      func(i int) int
+}
+
+// Print progression
+func (v *Verbose) Print(i int) {
+	v.Counter += v.Inc(i)
+	perc := 100 * v.Counter / v.TotComb
+	if perc > v.LastPerc {
+		log.Printf("%d%% completed...\n", perc)
+		v.LastPerc = perc
+	}
+}
+
+// generate standard, ordered tournament combinations
+func generateCombinations(list []string, size int, c chan<- *Match, verbose bool) {
 	tot := len(list)
 	switch size {
 	case 2:
+		v := Verbose{
+			Enabled:  verbose,
+			LastPerc: 0,
+			TotComb:  tot * (tot - 1) / 2,
+			Inc: func(c int) int {
+				return tot - c - 1
+			},
+		}
 		for i := 0; i < tot-1; i++ {
 			for j := i + 1; j < tot; j++ {
 				c <- &Match{Robots: []string{list[i], list[j]}}
 			}
+			if v.Enabled {
+				v.Print(i)
+			}
 		}
 	case 3:
+		v := Verbose{
+			Enabled:  verbose,
+			LastPerc: 0,
+			TotComb:  tot * (tot - 1) * (tot - 2) / 6,
+			Inc: func(c int) int {
+				return (tot - c - 1) * (tot - c - 2) / 2
+			},
+		}
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				for k := j + 1; k < tot; k++ {
 					c <- &Match{Robots: []string{list[i], list[j], list[k]}}
 				}
 			}
+			if v.Enabled {
+				v.Print(i)
+			}
 		}
 	case 4:
+		v := Verbose{
+			Enabled:  verbose,
+			LastPerc: 0,
+			TotComb:  tot * (tot - 1) * (tot - 2) * (tot - 3) / 24,
+			Inc: func(c int) int {
+				return (tot - c - 1) * (tot - c - 2) * (tot - c - 3) / 6
+			},
+		}
 		for i := 0; i < tot-3; i++ {
 			for j := i + 1; j < tot-2; j++ {
 				for k := j + 1; k < tot-1; k++ {
@@ -132,31 +186,68 @@ func generateCombinations(list []string, size int, c chan<- *Match) {
 					}
 				}
 			}
+			if v.Enabled {
+				v.Print(i)
+			}
 		}
 	default:
 		log.Fatal("Invalid size", size)
 	}
 }
 
-func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- *Match) {
+// generate standard, ordered sub-combinations for a benchmark tournament
+func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- *Match, verbose bool) {
 	tot := len(list)
 	switch size {
 	case 2:
+		v := Verbose{
+			Enabled:  verbose,
+			LastPerc: 0,
+			TotComb:  tot,
+			Inc: func(c int) int {
+				return 1
+			},
+		}
 		for i := 0; i < tot-1; i++ {
 			c <- &Match{Robots: []string{list[i], robot}}
+			if v.Enabled {
+				v.Print(i)
+			}
 		}
 	case 3:
+		v := Verbose{
+			Enabled:  verbose,
+			LastPerc: 0,
+			TotComb:  tot * (tot - 1) / 2,
+			Inc: func(c int) int {
+				return tot - c - 1
+			},
+		}
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				c <- &Match{Robots: []string{list[i], list[j], robot}}
 			}
+			if v.Enabled {
+				v.Print(i)
+			}
 		}
 	case 4:
+		v := Verbose{
+			Enabled:  verbose,
+			LastPerc: 0,
+			TotComb:  tot * (tot - 1) * (tot - 2) / 6,
+			Inc: func(c int) int {
+				return (tot - c - 1) * (tot - c - 2) / 2
+			},
+		}
 		for i := 0; i < tot-3; i++ {
 			for j := i + 1; j < tot-2; j++ {
 				for k := j + 1; k < tot-1; k++ {
 					c <- &Match{Robots: []string{list[i], list[j], list[k], robot}}
 				}
+			}
+			if v.Enabled {
+				v.Print(i)
 			}
 		}
 	default:
@@ -172,6 +263,8 @@ func check(err error) bool {
 	return false
 }
 
+// print out tournament results to stdout or file
+// if errors occur always print out to stdout
 func printRobots(out *string, tot int, result *Result) {
 	var bots []count.Robot
 
@@ -189,6 +282,8 @@ func printRobots(out *string, tot int, result *Result) {
 	sort.SliceStable(bots, func(i, j int) bool {
 		return bots[i].Eff > bots[j].Eff
 	})
+	// local function to print out to stdout if no output file is specified
+	// or as at last resort should errors occur
 	printToStd := func() {
 		var i int = 0
 		fmt.Println(Header)
@@ -226,20 +321,22 @@ func printRobots(out *string, tot int, result *Result) {
 	}
 }
 
+// given a match returns a Crobots command ready to be executed
 func (m *Match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	switch n {
 	case 2:
-		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1])
+		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1])
 	case 3:
-		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1], m.Robots[2])
+		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2])
 	case 4:
-		return exec.Command(exe, opt, "-l200000", m.Robots[0], m.Robots[1], m.Robots[2], m.Robots[3])
+		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2], m.Robots[3])
 	default:
 		log.Fatal("Invalid size", n)
 	}
 	return nil
 }
 
+// given a match execute Crobots command and parse output to update partial results
 func (m *Match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result *Result) {
 	var out bytes.Buffer
 	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
@@ -266,6 +363,7 @@ func (m *Match) processCrobotsMatch(crobotsExecutable string, opt string, tot in
 	}
 }
 
+// goroutine to handle a batch of matches
 func worker(id int, matches <-chan *Match, crobotsExecutable string, opt string, tot int, result *Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for m := range matches {
@@ -273,6 +371,7 @@ func worker(id int, matches <-chan *Match, crobotsExecutable string, opt string,
 	}
 }
 
+// check binary robot exists or try to compile source code if it doesn't
 func checkAndCompile(r string, crobotsExecutable string, path func(r string) string) string {
 	t := path(r) + RobotBinaryExt
 	if !fileExists(t) {
@@ -303,10 +402,11 @@ func main() {
 	crobotsExecutable := flag.String("exe", "crobots", "Crobots executable")
 	benchRobot := flag.String("bench", "", "robot (full path, no extension) to create a benchmark tournament for")
 	testMode := flag.Bool("test", false, "test mode, check configuration and exit")
-	randomMode := flag.Bool("random", false, "generate random matches (4vs4 only)")
+	randomMode := flag.Bool("random", false, "random mode: generate random matches for 4vs4 only")
 	limit := flag.Int("limit", 0, "limit random number of matches (random mode only)")
 	out := flag.String("out", "", "output report to file")
 	cpu := flag.Int("cpu", NumCPU, "number of threads (CPUs/cores)")
+	verbose := flag.Bool("verbose", false, "Verbose mode: print tournament progression percentage")
 
 	flag.Parse()
 
@@ -410,7 +510,24 @@ func main() {
 
 	if *randomMode {
 		l := *limit
-		log.Println("Random mode enable. Limit", l)
+		var counter = 0
+		var modulo int
+		// we don't want to print out verbose updates too often...
+		if l > 70 {
+			modulo = l / 7
+		} else {
+			modulo = 7
+		}
+
+		v := Verbose{
+			Enabled:  *verbose,
+			LastPerc: 0,
+			TotComb:  l,
+			Inc: func(c int) int {
+				return c
+			},
+		}
+		log.Println("Random mode enabled. Limit", l)
 
 		for l > 0 {
 			rand.Seed(time.Now().UnixNano())
@@ -423,11 +540,17 @@ func main() {
 				jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
 			}
 			l--
+			if v.Enabled {
+				counter++
+				if (counter % modulo) == 0 {
+					v.Print(modulo)
+				}
+			}
 		}
 	} else if br != "" {
-		generateCombinationsForBenchmark(br, robots, tot, jobs)
+		generateCombinationsForBenchmark(br, robots, tot, jobs, *verbose)
 	} else {
-		generateCombinations(robots, tot, jobs)
+		generateCombinations(robots, tot, jobs, *verbose)
 	}
 	close(jobs)
 	wg.Wait()
