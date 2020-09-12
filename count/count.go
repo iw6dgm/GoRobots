@@ -15,16 +15,17 @@ type Robot struct {
 	Eff    float32
 }
 
-func getName(s string) string {
+// GetName returns robot name without path and extension
+func GetName(s string) string {
 	return strings.Split(filepath.Base(strings.Trim(s, " ")), ".")[0]
 }
 
 func getSurvivor(s string) *Robot {
-	return &Robot{Name: getName(s[8:19]), Wins: 0, Ties: []int{0, 0, 0}}
+	return &Robot{Name: GetName(s[8:19]), Wins: 0, Ties: []int{0, 0, 0}}
 }
 
 func getRobot(s string, robots map[string]*Robot) *Robot {
-	n := getName(s[8:19])
+	n := GetName(s[8:19])
 	if r, ok := robots[n]; ok {
 		return r
 	}

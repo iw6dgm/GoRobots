@@ -22,7 +22,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.3.0-20200911"
+	Version = "v1.3.1-20200912"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -191,7 +191,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 			}
 		}
 	default:
-		log.Fatal("Invalid size", size)
+		log.Fatal("Error: invalid size", size)
 	}
 }
 
@@ -251,7 +251,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 			}
 		}
 	default:
-		log.Fatal("Invalid size", size)
+		log.Fatal("Error: invalid size", size)
 	}
 }
 
@@ -331,7 +331,7 @@ func (m *Match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 	case 4:
 		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2], m.Robots[3])
 	default:
-		log.Fatal("Invalid size", n)
+		log.Fatal("Error: invalid size", n)
 	}
 	return nil
 }
@@ -375,7 +375,7 @@ func worker(id int, matches <-chan *Match, crobotsExecutable string, opt string,
 func checkAndCompile(r string, crobotsExecutable string, path func(r string) string) string {
 	t := path(r) + RobotBinaryExt
 	if !fileExists(t) {
-		log.Println("Binary robot cannot be found:", t, ". Trying to compile source code")
+		log.Println("Warning: binary robot cannot be found:", t, "Compiling source code")
 		s := path(r) + RobotSourceExt
 		if fileExists(s) {
 			var out bytes.Buffer
@@ -386,7 +386,7 @@ func checkAndCompile(r string, crobotsExecutable string, path func(r string) str
 				log.Fatal(err)
 			}
 		} else {
-			log.Fatal("Robot source code cannot be found: ", s)
+			log.Fatal("Error: robot source code cannot be found: ", s)
 		}
 	}
 	return t
@@ -422,7 +422,7 @@ func main() {
 	runtime.GOMAXPROCS(NumCPU)
 
 	if _, ok := schema[*tournamentType]; !ok {
-		log.Fatalln("Invalid tournament type: ", *tournamentType)
+		log.Fatalln("Error: invalid tournament type: ", *tournamentType)
 	}
 
 	tot, _ := schema[*tournamentType]
@@ -436,7 +436,7 @@ func main() {
 
 	if *randomMode {
 		if tot != 4 {
-			log.Fatal("Random mode supported for 4vs4 only")
+			log.Fatal("Error: random mode supported for 4vs4 only")
 		}
 
 		if *limit <= 0 {
@@ -451,7 +451,7 @@ func main() {
 	config := loadConfig(*configFile)
 	listSize := len(config.ListRobots)
 	if listSize < tot {
-		log.Fatal("Robot list insufficient!")
+		log.Fatal("Error: robot list too small!")
 	}
 
 	var robots []string
@@ -468,12 +468,26 @@ func main() {
 		checkAndCompile(*benchRobot, *crobotsExecutable, func(r string) string {
 			return r
 		})
+		// sanity check
+		base := count.GetName(*benchRobot)
+		for _, r := range robots {
+			b := count.GetName(r)
+			if base == b {
+				log.Fatal("Error: duplicate name detected as configuration already contains ", base)
+			}
+		}
 	}
 
 	crobots := *crobotsExecutable
 
 	if !commandExists(crobots) {
-		log.Fatal("Crobots executable not found: ", crobots)
+		log.Fatal("Error: Crobots executable not found ", crobots)
+	}
+
+	var br string = ""
+	if *benchRobot != "" {
+		br = *benchRobot + RobotBinaryExt
+		log.Println("Benchmark tournament for", *benchRobot)
 	}
 
 	if *testMode {
@@ -500,12 +514,6 @@ func main() {
 	for w := 1; w <= NumCPU; w++ {
 		wg.Add(1)
 		go worker(w, jobs, crobots, opt, tot, result, &wg)
-	}
-
-	var br string = ""
-	if *benchRobot != "" {
-		br = *benchRobot + RobotBinaryExt
-		log.Println("Benchmark tournament for", br)
 	}
 
 	if *randomMode {

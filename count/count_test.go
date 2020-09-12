@@ -14,7 +14,7 @@ const (
 
 func TestGetName(t *testing.T) {
 
-	if name := getName(robotName[8:19]); name != "jedi13" {
+	if name := GetName(robotName[8:19]); name != "jedi13" {
 		t.Errorf("Error while parsing robot name; want jedi13, got [%s]", name)
 	}
 }
