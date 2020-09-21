@@ -22,7 +22,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.3.1-20200912"
+	Version = "v1.3.2-20200921"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotBinaryExt is the file extension of the compiled binary robot
@@ -322,7 +322,7 @@ func printRobots(out *string, tot int, result *Result) {
 }
 
 // given a match returns a Crobots command ready to be executed
-func (m *Match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
+func (m *Match) executeCrobotsMatch(exe, opt string, n int) *exec.Cmd {
 	switch n {
 	case 2:
 		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1])
@@ -337,7 +337,7 @@ func (m *Match) executeCrobotsMatch(exe string, opt string, n int) *exec.Cmd {
 }
 
 // given a match execute Crobots command and parse output to update partial results
-func (m *Match) processCrobotsMatch(crobotsExecutable string, opt string, tot int, result *Result) {
+func (m *Match) processCrobotsMatch(crobotsExecutable, opt string, tot int, result *Result) {
 	var out bytes.Buffer
 	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
 	cmd.Stdout = &out
@@ -364,7 +364,7 @@ func (m *Match) processCrobotsMatch(crobotsExecutable string, opt string, tot in
 }
 
 // goroutine to handle a batch of matches
-func worker(id int, matches <-chan *Match, crobotsExecutable string, opt string, tot int, result *Result, wg *sync.WaitGroup) {
+func worker(id int, matches <-chan *Match, crobotsExecutable, opt string, tot int, result *Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for m := range matches {
 		m.processCrobotsMatch(crobotsExecutable, opt, tot, result)
@@ -372,7 +372,7 @@ func worker(id int, matches <-chan *Match, crobotsExecutable string, opt string,
 }
 
 // check binary robot exists or try to compile source code if it doesn't
-func checkAndCompile(r string, crobotsExecutable string, path func(r string) string) string {
+func checkAndCompile(r, crobotsExecutable string, path func(r string) string) string {
 	t := path(r) + RobotBinaryExt
 	if !fileExists(t) {
 		log.Println("Warning: binary robot cannot be found:", t, "Compiling source code")
@@ -390,6 +390,39 @@ func checkAndCompile(r string, crobotsExecutable string, path func(r string) str
 		}
 	}
 	return t
+}
+
+// generate matches for benchmark using current random permutation and queue them all
+func benchMatches(limit, slices int, perm []int, robots []string, jobs chan *Match, br string) int {
+	t := min(limit, slices)
+	j := 0
+	for i := 0; i < t; i++ {
+		current := perm[j : j+3]
+		a, b, c := current[0], current[1], current[2]
+		jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], br}}
+		j += 3
+	}
+	return t
+}
+
+// generate matches using current random permutation and queue them all
+func randomMatches(limit, slices int, perm []int, robots []string, jobs chan *Match) int {
+	t := min(limit, slices)
+	j := 0
+	for i := 0; i < t; i++ {
+		current := perm[j : j+4]
+		a, b, c, d := current[0], current[1], current[2], current[3]
+		jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
+		j += 4
+	}
+	return t
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func main() {
@@ -518,13 +551,12 @@ func main() {
 
 	if *randomMode {
 		l := *limit
-		var counter = 0
-		var modulo int
-		// we don't want to print out verbose updates too often...
-		if l > 70 {
-			modulo = l / 7
+
+		var slices int
+		if br != "" {
+			slices = listSize / 3
 		} else {
-			modulo = 7
+			slices = listSize / 4
 		}
 
 		v := Verbose{
@@ -538,21 +570,17 @@ func main() {
 		log.Println("Random mode enabled. Limit", l)
 
 		for l > 0 {
+			var t int
 			rand.Seed(time.Now().UnixNano())
 			perm := rand.Perm(listSize)
 			if br != "" {
-				a, b, c := perm[0], perm[1], perm[2]
-				jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], br}}
+				t = benchMatches(l, slices, perm, robots, jobs, br)
 			} else {
-				a, b, c, d := perm[0], perm[1], perm[2], perm[3]
-				jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
+				t = randomMatches(l, slices, perm, robots, jobs)
 			}
-			l--
+			l -= t
 			if v.Enabled {
-				counter++
-				if (counter % modulo) == 0 {
-					v.Print(modulo)
-				}
+				v.Print(t)
 			}
 		}
 	} else if br != "" {
