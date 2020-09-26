@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,13 +21,13 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.3.2-20200921"
+	Version = "v1.3.4-20200926"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
-	// RobotBinaryExt is the file extension of the compiled binary robot
-	RobotBinaryExt = ".ro"
 	// RobotSourceExt is the file extension of the robot source code
 	RobotSourceExt = ".r"
+	// RobotBinaryExt is the file extension of the compiled binary robot
+	RobotBinaryExt = RobotSourceExt + "o"
 	// Header is the output header
 	Header = "#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%"
 	// OutputFormat is a single row output format
@@ -40,6 +39,10 @@ const (
 var (
 	// NumCPU is the number of detected CPUs/cores
 	NumCPU int = runtime.NumCPU()
+	// Crobots is the crobots executable
+	Crobots string
+	// EOF End-of-line
+	EOF = []byte("\n")
 )
 
 // Match holds a list of robots for a single crobots match
@@ -82,7 +85,7 @@ func loadConfig(config string) tournamentConfig {
 	return cfg
 }
 
-func logToString(file string) string {
+func logToString(file string) []byte {
 	// Read entire file content, giving us little control but
 	// making it very simple. No need to close the file.
 	content, err := ioutil.ReadFile(file)
@@ -90,8 +93,7 @@ func logToString(file string) string {
 		log.Fatal(err)
 	}
 
-	// Convert []byte to string
-	return string(content)
+	return content
 }
 
 // fileExists checks if a file exists and is not a directory before we
@@ -129,7 +131,7 @@ func (v *Verbose) Print(i int) {
 	}
 }
 
-// generate standard, ordered tournament combinations
+// generate standard, ordered tournament match combinations
 func generateCombinations(list []string, size int, c chan<- *Match, verbose bool) {
 	tot := len(list)
 	switch size {
@@ -322,30 +324,30 @@ func printRobots(out *string, tot int, result *Result) {
 }
 
 // given a match returns a Crobots command ready to be executed
-func (m *Match) executeCrobotsMatch(exe, opt string, n int) *exec.Cmd {
+func (m *Match) executeCrobotsMatch(opt string, n int) ([]byte, error) {
 	switch n {
 	case 2:
-		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1])
+		return exec.Command(Crobots, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1]).Output()
 	case 3:
-		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2])
+		return exec.Command(Crobots, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2]).Output()
 	case 4:
-		return exec.Command(exe, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2], m.Robots[3])
+		return exec.Command(Crobots, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1], m.Robots[2], m.Robots[3]).Output()
 	default:
 		log.Fatal("Error: invalid size", n)
 	}
-	return nil
+	return nil, fmt.Errorf("something went horribly wrong")
 }
 
 // given a match execute Crobots command and parse output to update partial results
-func (m *Match) processCrobotsMatch(crobotsExecutable, opt string, tot int, result *Result) {
-	var out bytes.Buffer
-	cmd := m.executeCrobotsMatch(crobotsExecutable, opt, tot)
-	cmd.Stdout = &out
-	err := cmd.Run()
+func (m *Match) processCrobotsMatch(opt string, tot int, result *Result) {
+	out, err := m.executeCrobotsMatch(opt, tot)
 	if err != nil {
 		log.Fatal(err)
 	}
-	partial := count.ParseLogs(strings.Split(out.String(), "\n"))
+	if len(out) == 0 {
+		log.Fatal("no output from Crobots match")
+	}
+	partial := count.ParseLogs(bytes.Split(out, EOF))
 	for _, robot := range partial {
 		name := robot.Name
 		// sync.Map doesn't seem to work here
@@ -364,22 +366,22 @@ func (m *Match) processCrobotsMatch(crobotsExecutable, opt string, tot int, resu
 }
 
 // goroutine to handle a batch of matches
-func worker(id int, matches <-chan *Match, crobotsExecutable, opt string, tot int, result *Result, wg *sync.WaitGroup) {
+func worker(id int, matches <-chan *Match, opt string, tot int, result *Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for m := range matches {
-		m.processCrobotsMatch(crobotsExecutable, opt, tot, result)
+		m.processCrobotsMatch(opt, tot, result)
 	}
 }
 
-// check binary robot exists or try to compile source code if it doesn't
-func checkAndCompile(r, crobotsExecutable string, path func(r string) string) string {
+// check binary robot exists or try to compile its source code
+func checkAndCompile(r string, path func(r string) string) string {
 	t := path(r) + RobotBinaryExt
 	if !fileExists(t) {
 		log.Println("Warning: binary robot cannot be found:", t, "Compiling source code")
 		s := path(r) + RobotSourceExt
 		if fileExists(s) {
 			var out bytes.Buffer
-			cmd := exec.Command(crobotsExecutable, "-c", s)
+			cmd := exec.Command(Crobots, "-c", s)
 			cmd.Stdout = &out
 			err := cmd.Run()
 			if err != nil {
@@ -462,7 +464,7 @@ func main() {
 
 	if *parseLog != "" {
 		content := logToString(*parseLog)
-		result := &Result{Robots: count.ParseLogs(strings.Split(content, "\n"))}
+		result := &Result{Robots: count.ParseLogs(bytes.Split(content, EOF))}
 		printRobots(out, tot, result)
 		return
 	}
@@ -490,7 +492,7 @@ func main() {
 	var robots []string
 
 	for _, r := range config.ListRobots {
-		t := checkAndCompile(r, *crobotsExecutable, func(r string) string {
+		t := checkAndCompile(r, func(r string) string {
 			return config.SourcePath + Separator + r
 		})
 
@@ -498,7 +500,7 @@ func main() {
 	}
 
 	if *benchRobot != "" {
-		checkAndCompile(*benchRobot, *crobotsExecutable, func(r string) string {
+		checkAndCompile(*benchRobot, func(r string) string {
 			return r
 		})
 		// sanity check
@@ -511,10 +513,10 @@ func main() {
 		}
 	}
 
-	crobots := *crobotsExecutable
+	Crobots = *crobotsExecutable
 
-	if !commandExists(crobots) {
-		log.Fatal("Error: Crobots executable not found ", crobots)
+	if !commandExists(Crobots) {
+		log.Fatal("Error: Crobots executable not found ", Crobots)
 	}
 
 	var br string = ""
@@ -546,7 +548,7 @@ func main() {
 
 	for w := 1; w <= NumCPU; w++ {
 		wg.Add(1)
-		go worker(w, jobs, crobots, opt, tot, result, &wg)
+		go worker(w, jobs, opt, tot, result, &wg)
 	}
 
 	if *randomMode {

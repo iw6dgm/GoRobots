@@ -51,18 +51,20 @@ func updateSurvivor(s string, survivors map[string]*Robot) {
 }
 
 // ParseLogs returns a log parsed into a map of robots
-func ParseLogs(lines []string) map[string]*Robot {
+func ParseLogs(lines [][]byte) map[string]*Robot {
 
 	robots := make(map[string]*Robot)
 	survivors := make(map[string]*Robot)
 
-	for _, line := range lines {
+	for _, bytes := range lines {
 
-		l := len(line)
+		l := len(bytes)
 
 		if l < 2 {
 			continue
 		}
+
+		line := string(bytes)
 
 		if strings.HasPrefix(line, "Match") {
 			survivors = make(map[string]*Robot)

@@ -1,10 +1,10 @@
 package count
 
 import (
+	"bytes"
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -27,10 +27,7 @@ func TestParseLog(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	// Convert []byte to string and print to screen
-	text := string(content)
-
-	result := ParseLogs(strings.Split(text, "\n"))
+	result := ParseLogs(bytes.Split(content, []byte("\n")))
 
 	if l := len(result); l != 4 {
 		t.Errorf("Error while parsing logs; want 4, got %d, result = %v+", l, result)
