@@ -21,7 +21,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.3.4-20200926"
+	Version = "v1.4.0-20200927"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -32,6 +32,8 @@ const (
 	Header = "#\tName\t\tGames\t\tWins\t\tTies2\t\tTies3\t\tTies4\t\tLost\t\tPoints\t\tEff%"
 	// OutputFormat is a single row output format
 	OutputFormat = "%d\t%s\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%.3f\n"
+	// SQLOutputFormat template for SQL updates
+	SQLOutputFormat = "UPDATE `results_%s` SET `games`=`games`+%d, `wins`=`wins`+%d, `ties`=`ties`+%d, `points`=`points`+%d WHERE `robot`='%s';\n"
 	// StdMatchLimitCycles is the standard Crobots limit as number of cycles for a single match
 	StdMatchLimitCycles = "-l200000"
 )
@@ -210,7 +212,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 				return 1
 			},
 		}
-		for i := 0; i < tot-1; i++ {
+		for i := 0; i < tot; i++ {
 			c <- &Match{Robots: []string{list[i], robot}}
 			if v.Enabled {
 				v.Print(i)
@@ -225,8 +227,8 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 				return tot - c - 1
 			},
 		}
-		for i := 0; i < tot-2; i++ {
-			for j := i + 1; j < tot-1; j++ {
+		for i := 0; i < tot-1; i++ {
+			for j := i + 1; j < tot; j++ {
 				c <- &Match{Robots: []string{list[i], list[j], robot}}
 			}
 			if v.Enabled {
@@ -242,9 +244,9 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 				return (tot - c - 1) * (tot - c - 2) / 2
 			},
 		}
-		for i := 0; i < tot-3; i++ {
-			for j := i + 1; j < tot-2; j++ {
-				for k := j + 1; k < tot-1; k++ {
+		for i := 0; i < tot-2; i++ {
+			for j := i + 1; j < tot-1; j++ {
+				for k := j + 1; k < tot; k++ {
 					c <- &Match{Robots: []string{list[i], list[j], list[k], robot}}
 				}
 			}
@@ -265,9 +267,9 @@ func check(err error) bool {
 	return false
 }
 
-// print out tournament results to stdout or file
+// print out tournament results to stdout or file or SQL updates
 // if errors occur always print out to stdout
-func printRobots(out *string, tot int, result *Result) {
+func printRobots(out, sql, tournamentType *string, tot int, result *Result) {
 	var bots []count.Robot
 
 	for _, robot := range result.Robots {
@@ -294,6 +296,27 @@ func printRobots(out *string, tot int, result *Result) {
 			fmt.Printf(OutputFormat, i, robot.Name, robot.Games, robot.Wins, robot.Ties[0], robot.Ties[1], robot.Ties[2], robot.Games-robot.Wins-(robot.Ties[0]+robot.Ties[1]+robot.Ties[2]), robot.Points, robot.Eff)
 		}
 	}
+	// Output to SQL updates
+	if *sql != "" {
+		outputFile := *sql
+		t := *tournamentType
+		f, err := os.Create(outputFile)
+		if check(err) {
+			printToStd()
+			return
+		}
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		for _, robot := range bots {
+			_, err = fmt.Fprintf(w, SQLOutputFormat, t, robot.Games, robot.Wins, robot.Ties[0]+robot.Ties[1]+robot.Ties[2], robot.Points, robot.Name)
+			if check(err) {
+				printToStd()
+				return
+			}
+		}
+		w.Flush()
+	}
+	// Output to tab separated file
 	if *out != "" {
 		outputFile := *out
 		f, err := os.Create(outputFile)
@@ -439,9 +462,10 @@ func main() {
 	testMode := flag.Bool("test", false, "test mode, check configuration and exit")
 	randomMode := flag.Bool("random", false, "random mode: generate random matches for 4vs4 only")
 	limit := flag.Int("limit", 0, "limit random number of matches (random mode only)")
-	out := flag.String("out", "", "output report to file")
+	out := flag.String("out", "", "output results to file")
+	sql := flag.String("sql", "", "output results as SQL updates to file")
 	cpu := flag.Int("cpu", NumCPU, "number of threads (CPUs/cores)")
-	verbose := flag.Bool("verbose", false, "Verbose mode: print tournament progression percentage")
+	verbose := flag.Bool("verbose", false, "verbose mode: print tournament progression percentage")
 
 	flag.Parse()
 
@@ -453,7 +477,7 @@ func main() {
 		NumCPU = c
 	}
 
-	log.Println("Going to use", NumCPU, "CPU(s)/core(s)")
+	log.Println("Using", NumCPU, "CPU(s)/core(s)")
 	runtime.GOMAXPROCS(NumCPU)
 
 	if _, ok := schema[*tournamentType]; !ok {
@@ -465,7 +489,7 @@ func main() {
 	if *parseLog != "" {
 		content := logToString(*parseLog)
 		result := &Result{Robots: count.ParseLogs(bytes.Split(content, EOF))}
-		printRobots(out, tot, result)
+		printRobots(out, sql, tournamentType, tot, result)
 		return
 	}
 
@@ -499,6 +523,12 @@ func main() {
 		robots = append(robots, t)
 	}
 
+	Crobots = *crobotsExecutable
+
+	if !commandExists(Crobots) {
+		log.Fatal("Error: Crobots executable not found ", Crobots)
+	}
+
 	if *benchRobot != "" {
 		checkAndCompile(*benchRobot, func(r string) string {
 			return r
@@ -513,16 +543,10 @@ func main() {
 		}
 	}
 
-	Crobots = *crobotsExecutable
-
-	if !commandExists(Crobots) {
-		log.Fatal("Error: Crobots executable not found ", Crobots)
-	}
-
 	var br string = ""
 	if *benchRobot != "" {
 		br = *benchRobot + RobotBinaryExt
-		log.Println("Benchmark tournament for", *benchRobot)
+		log.Println("Benchmark", *tournamentType, "tournament for", *benchRobot)
 	}
 
 	if *testMode {
@@ -539,7 +563,7 @@ func main() {
 	case 4:
 		opt = fmt.Sprintf("-m%d", config.Match4VS4)
 	}
-	log.Println("Start processing...")
+	log.Println("Start processing", *tournamentType, "...")
 	start := time.Now()
 	var mutex sync.Mutex
 	result := &Result{Robots: make(map[string]*count.Robot), Mutex: &mutex}
@@ -594,5 +618,5 @@ func main() {
 	wg.Wait()
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
-	printRobots(out, tot, result)
+	printRobots(out, sql, tournamentType, tot, result)
 }
