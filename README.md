@@ -28,7 +28,17 @@ Robots will be searched by concatenating the `sourcePath` and the robot filename
 
 `sourcePath` is `'./test/v4'` and `listRobots` contains `'micro/rabbit2'` GoRobots will search for `'./test/v4/micro/rabbit2.ro'` first and, if not found, try to compile `'./test/v4/micro/rabbit2.r'`
 
-On Windows one may use `sourcePath: '.\test\v4'` and `'micro\rabbit2'` as robot filename hence GoRobots will concatename them using `\` path separator generating `'.\test\v4\micro\rabbit2'`.
+On Windows one may use `sourcePath: '.\test\v4'` and `'micro\rabbit2'` as robot filename hence GoRobots will concatenate them using `\` path separator generating `'.\test\v4\micro\rabbit2'`.
+
+Example (Linux/macOS):
+```yml
+label: '2013'
+matchF2F: 1000
+match3VS3: 250
+match4VS4: 168
+sourcePath: '.'
+listRobots: ['2013/lamela', '2013/eternity', '2013/ride', '2013/okapi', '2013/pjanic']
+```
 
 ## Command line options
 
