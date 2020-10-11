@@ -31,7 +31,7 @@ Robots will be searched by concatenating the `sourcePath` and the robot filename
 On Windows one may use `sourcePath: '.\test\v4'` and `'micro\rabbit2'` as robot filename hence GoRobots will concatenate them using `\` path separator generating `'.\test\v4\micro\rabbit2'`.
 
 Example (Linux/macOS):
-```yml
+```yaml
 label: '2013'
 matchF2F: 1000
 match3VS3: 250
