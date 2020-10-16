@@ -108,9 +108,9 @@ By using the `-test` option GoRobots won't be running the tournament but will ex
 
 Results can be saved into text and SQL files, e.g.:
 
-`gorobots -type 4vs4 -config ./conf/tournament.yml -exe ~/git/crobots/bin/crobots -sql ./output.sql -csv ./output.csv`
+`gorobots -type 4vs4 -config ./conf/tournament.yml -exe ~/git/crobots/bin/crobots -sql ./output.sql -out ./output.tsv`
 
-will save a text file `output.csv` in TAB separated format and a text file `output.sql` with SQL `UPDATE` statements. For the SQL statements to be usable you may need to install somewhere a SQL-compatible database of your choice (SQLite, MySQL, ...), create results tables via SQL code similar to
+will save a text file `output.tsv` in TSV (tab separated values) format and a text file `output.sql` with SQL `UPDATE` statements. For the SQL statements to be usable you may need to install somewhere a SQL-compatible database of your choice (SQLite, MySQL, ...), create results tables via SQL code similar to
 
 ```sql
 CREATE TABLE `results_f2f` (
