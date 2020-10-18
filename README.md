@@ -6,7 +6,7 @@ You can download GoRobots source code and compile it with your current version o
 ```
 go build gorobots.go
 ```
-or alternatively download, unpack and install (copy/move into your executable path) the binary from any of the available builds.
+or alternatively download, unpack and install (copy/move into your executable path) the binary from any of the [available builds](https://crobots.deepthought.it/home.php?link=1#gorobots).
 
 GoRobots will automatically detect the number of available cores and use them to run concurrent matches via multiple threads.
 
@@ -143,7 +143,7 @@ CREATE TABLE `results_4vs4` (
 
 and insert the robots names first (without extension) before running the updates.
 
-Note: on Windows it is _not_ recommended to redirect the output (e.g. with `> output.csv`) to file but to use the `-csv` option instead as redirection might cause GoRobots to unexpectedely crash.
+Note: on Windows it is _not_ recommended to redirect the output (e.g. with `> output.csv`) to file but to use the `-out` option instead as redirection might cause GoRobots to unexpectedely crash.
 
 ### Robot benchmarking
 
@@ -172,5 +172,5 @@ Note: `-random` option requires to use `limit <n>` and only supports `-type 4vs4
 
 ### Limitations and future developments
 
-Compared to the Python tournament manager, GoRobots lacks any support for databases therefore tournaments cannot be paused nor resumed. This feature did not turn out to be particularly useful in the past - actually quite taxing in terms of performance - and will not probably be implemented in the future.
-Future developments might include support for f2f, 3vs3 and 4vs4 tournament modes via the same command line execution (so, no need to call GoRobots three times), for instance using the `label` configuration property to generate output filenames accordingly. This means the behaviour of the `-type`, `-csv` and `-sql` options, one day, may unexpectedly change.
+Compared to the Python tournament manager, GoRobots lacks any support for databases, therefore tournaments cannot be paused nor resumed. This feature did not turn out to be particularly useful in the past - actually quite taxing in terms of performance - and will not probably be implemented in the future.
+Future developments might include support for f2f, 3vs3 and 4vs4 tournament modes via the same command line execution (so, no need to call GoRobots three times), for instance using the `label` configuration property to generate output filenames accordingly. This means the behaviour of the `-type`, `-out` and `-sql` options, one day, may unexpectedly change.
