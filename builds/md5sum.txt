@@ -1,0 +1,3 @@
+059369bd589df3e6b3691448ef1afd3c *gorobots-1.4.0-linux-x86_64.gz
+36801fc13f8a98c02fccfbe1b1c16d1b *gorobots-1.4.0-macos-x86_64.gz
+dfd80fba5d585883b09ff70264bb4ae6 *gorobots-1.4.0-win64.zip
