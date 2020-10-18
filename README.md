@@ -6,7 +6,7 @@ You can download GoRobots source code and compile it with your current version o
 ```
 go build gorobots.go
 ```
-or alternatively download, unpack and install (copy/move into your executable path) the binary from any of the [available builds](https://crobots.deepthought.it/home.php?link=1#gorobots).
+or alternatively download, unpack and install (copy/move into your executable path) the binary from any of the [available builds](https://github.com/iw6dgm/GoRobots/tree/master/builds).
 
 GoRobots will automatically detect the number of available cores and use them to run concurrent matches via multiple threads.
 
