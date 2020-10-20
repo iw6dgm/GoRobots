@@ -21,7 +21,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.4.0-20200927"
+	Version = "v1.4.1-20201020"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -515,18 +515,18 @@ func main() {
 
 	var robots []string
 
+	Crobots = *crobotsExecutable
+
+	if !commandExists(Crobots) {
+		log.Fatal("Error: Crobots executable not found ", Crobots)
+	}
+
 	for _, r := range config.ListRobots {
 		t := checkAndCompile(r, func(r string) string {
 			return config.SourcePath + Separator + r
 		})
 
 		robots = append(robots, t)
-	}
-
-	Crobots = *crobotsExecutable
-
-	if !commandExists(Crobots) {
-		log.Fatal("Error: Crobots executable not found ", Crobots)
 	}
 
 	if *benchRobot != "" {
