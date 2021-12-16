@@ -21,7 +21,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.4.1-20201020"
+	Version = "v1.5.0-20211216"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -52,9 +52,8 @@ type Match struct {
 	Robots []string
 }
 
-// Result holds a single crobots results and a Mutex
+// Result holds a single crobots results
 type Result struct {
-	Mutex  *sync.Mutex
 	Robots map[string]*count.Robot
 }
 
@@ -362,7 +361,7 @@ func (m *Match) executeCrobotsMatch(opt string, n int) ([]byte, error) {
 }
 
 // given a match execute Crobots command and parse output to update partial results
-func (m *Match) processCrobotsMatch(opt string, tot int, result *Result) {
+func (m *Match) processCrobotsMatch(opt string, tot int, result chan<- *Result) {
 	out, err := m.executeCrobotsMatch(opt, tot)
 	if err != nil {
 		log.Fatal(err)
@@ -371,28 +370,31 @@ func (m *Match) processCrobotsMatch(opt string, tot int, result *Result) {
 		log.Fatal("no output from Crobots match")
 	}
 	partial := count.ParseLogs(bytes.Split(out, EOF))
-	for _, robot := range partial {
-		name := robot.Name
-		// sync.Map doesn't seem to work here
-		result.Mutex.Lock()
-		if update, found := result.Robots[name]; found {
-			update.Games += robot.Games
-			update.Wins += robot.Wins
-			update.Ties[0] += robot.Ties[0]
-			update.Ties[1] += robot.Ties[1]
-			update.Ties[2] += robot.Ties[2]
-		} else {
-			result.Robots[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
-		}
-		result.Mutex.Unlock()
-	}
+	result <- &Result{Robots: partial}
 }
 
 // goroutine to handle a batch of matches
-func worker(id int, matches <-chan *Match, opt string, tot int, result *Result, wg *sync.WaitGroup) {
+func worker(id int, matches <-chan *Match, opt string, tot int, result chan<- *Result, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for m := range matches {
 		m.processCrobotsMatch(opt, tot, result)
+	}
+}
+
+func updateTotal(partial <-chan *Result, total *Result) {
+	for p := range partial {
+		for _, robot := range p.Robots {
+			name := robot.Name
+			if update, found := total.Robots[name]; found {
+				update.Games += robot.Games
+				update.Wins += robot.Wins
+				update.Ties[0] += robot.Ties[0]
+				update.Ties[1] += robot.Ties[1]
+				update.Ties[2] += robot.Ties[2]
+			} else {
+				total.Robots[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
+			}
+		}
 	}
 }
 
@@ -565,8 +567,8 @@ func main() {
 	}
 	log.Println("Start processing", *tournamentType, "...")
 	start := time.Now()
-	var mutex sync.Mutex
-	result := &Result{Robots: make(map[string]*count.Robot), Mutex: &mutex}
+	result := make(chan *Result)
+	total := &Result{Robots: make(map[string]*count.Robot)}
 	jobs := make(chan *Match, NumCPU)
 	var wg sync.WaitGroup
 
@@ -574,6 +576,8 @@ func main() {
 		wg.Add(1)
 		go worker(w, jobs, opt, tot, result, &wg)
 	}
+
+	go updateTotal(result, total)
 
 	if *randomMode {
 		l := *limit
@@ -616,7 +620,8 @@ func main() {
 	}
 	close(jobs)
 	wg.Wait()
+	close(result)
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
-	printRobots(out, sql, tournamentType, tot, result)
+	printRobots(out, sql, tournamentType, tot, total)
 }
