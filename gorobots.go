@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
-	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -21,7 +20,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.5.0-20211216"
+	Version = "v1.5.1-20211224"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -46,6 +45,8 @@ var (
 	// EOF End-of-line
 	EOF = []byte("\n")
 )
+
+type signal struct{}
 
 // Match holds a list of robots for a single crobots match
 type Match struct {
@@ -374,28 +375,12 @@ func (m *Match) processCrobotsMatch(opt string, tot int, result chan<- *Result) 
 }
 
 // goroutine to handle a batch of matches
-func worker(id int, matches <-chan *Match, opt string, tot int, result chan<- *Result, wg *sync.WaitGroup) {
-	defer wg.Done()
+func worker(id int, matches <-chan *Match, opt string, tot int, result chan<- *Result, s chan<- signal) {
 	for m := range matches {
 		m.processCrobotsMatch(opt, tot, result)
 	}
-}
-
-func updateTotal(partial <-chan *Result, total *Result) {
-	for p := range partial {
-		for _, robot := range p.Robots {
-			name := robot.Name
-			if update, found := total.Robots[name]; found {
-				update.Games += robot.Games
-				update.Wins += robot.Wins
-				update.Ties[0] += robot.Ties[0]
-				update.Ties[1] += robot.Ties[1]
-				update.Ties[2] += robot.Ties[2]
-			} else {
-				total.Robots[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
-			}
-		}
-	}
+	var end signal
+	s <- end
 }
 
 // check binary robot exists or try to compile its source code
@@ -570,14 +555,30 @@ func main() {
 	result := make(chan *Result)
 	total := &Result{Robots: make(map[string]*count.Robot)}
 	jobs := make(chan *Match, NumCPU)
-	var wg sync.WaitGroup
+	sig := make(chan signal)
 
 	for w := 1; w <= NumCPU; w++ {
-		wg.Add(1)
-		go worker(w, jobs, opt, tot, result, &wg)
+		go worker(w, jobs, opt, tot, result, sig)
 	}
 
-	go updateTotal(result, total)
+	go func() {
+		for p := range result {
+			for _, robot := range p.Robots {
+				name := robot.Name
+				if update, found := total.Robots[name]; found {
+					update.Games += robot.Games
+					update.Wins += robot.Wins
+					update.Ties[0] += robot.Ties[0]
+					update.Ties[1] += robot.Ties[1]
+					update.Ties[2] += robot.Ties[2]
+				} else {
+					total.Robots[name] = &count.Robot{Name: name, Games: robot.Games, Wins: robot.Wins, Ties: robot.Ties, Points: 0, Eff: 0.0}
+				}
+			}
+		}
+		var end signal
+		sig <- end
+	}()
 
 	if *randomMode {
 		l := *limit
@@ -619,8 +620,12 @@ func main() {
 		generateCombinations(robots, tot, jobs, *verbose)
 	}
 	close(jobs)
-	wg.Wait()
+	for i := 0; i < NumCPU; i += 1 {
+		<-sig
+	}
 	close(result)
+	<-sig
+
 	duration := time.Since(start)
 	log.Println("Completed in", duration)
 	printRobots(out, sql, tournamentType, tot, total)
