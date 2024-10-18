@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -20,7 +19,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.5.1-20211224"
+	Version = "v1.5.2-20241018"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -90,7 +89,7 @@ func loadConfig(config string) tournamentConfig {
 func logToString(file string) []byte {
 	// Read entire file content, giving us little control but
 	// making it very simple. No need to close the file.
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -458,7 +457,7 @@ func main() {
 
 	c := *cpu
 
-	if c < 1 || c > NumCPU {
+	if c < 1 || c > 2*NumCPU {
 		log.Println("Invalid parameter cpu", c, ". Using default", NumCPU)
 	} else {
 		NumCPU = c
@@ -471,7 +470,7 @@ func main() {
 		log.Fatalln("Error: invalid tournament type: ", *tournamentType)
 	}
 
-	tot, _ := schema[*tournamentType]
+	tot := schema[*tournamentType]
 
 	if *parseLog != "" {
 		content := logToString(*parseLog)
