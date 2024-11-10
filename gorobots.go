@@ -19,7 +19,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.5.2-20241018"
+	Version = "v1.5.3-20241110"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -37,8 +37,6 @@ const (
 )
 
 var (
-	// NumCPU is the number of detected CPUs/cores
-	NumCPU int = runtime.NumCPU()
 	// Crobots is the crobots executable
 	Crobots string
 	// EOF End-of-line
@@ -49,7 +47,7 @@ type signal struct{}
 
 // Match holds a list of robots for a single crobots match
 type Match struct {
-	Robots []string
+	Robots [4]string
 }
 
 // Result holds a single crobots results
@@ -147,7 +145,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 		}
 		for i := 0; i < tot-1; i++ {
 			for j := i + 1; j < tot; j++ {
-				c <- &Match{Robots: []string{list[i], list[j]}}
+				c <- &Match{Robots: [4]string{list[i], list[j]}}
 			}
 			if v.Enabled {
 				v.Print(i)
@@ -165,7 +163,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				for k := j + 1; k < tot; k++ {
-					c <- &Match{Robots: []string{list[i], list[j], list[k]}}
+					c <- &Match{Robots: [4]string{list[i], list[j], list[k]}}
 				}
 			}
 			if v.Enabled {
@@ -185,7 +183,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 			for j := i + 1; j < tot-2; j++ {
 				for k := j + 1; k < tot-1; k++ {
 					for z := k + 1; z < tot; z++ {
-						c <- &Match{Robots: []string{list[i], list[j], list[k], list[z]}}
+						c <- &Match{Robots: [4]string{list[i], list[j], list[k], list[z]}}
 					}
 				}
 			}
@@ -212,7 +210,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 			},
 		}
 		for i := 0; i < tot; i++ {
-			c <- &Match{Robots: []string{list[i], robot}}
+			c <- &Match{Robots: [4]string{list[i], robot}}
 			if v.Enabled {
 				v.Print(i)
 			}
@@ -228,7 +226,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 		}
 		for i := 0; i < tot-1; i++ {
 			for j := i + 1; j < tot; j++ {
-				c <- &Match{Robots: []string{list[i], list[j], robot}}
+				c <- &Match{Robots: [4]string{list[i], list[j], robot}}
 			}
 			if v.Enabled {
 				v.Print(i)
@@ -246,7 +244,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				for k := j + 1; k < tot; k++ {
-					c <- &Match{Robots: []string{list[i], list[j], list[k], robot}}
+					c <- &Match{Robots: [4]string{list[i], list[j], list[k], robot}}
 				}
 			}
 			if v.Enabled {
@@ -374,7 +372,7 @@ func (m *Match) processCrobotsMatch(opt string, tot int, result chan<- *Result) 
 }
 
 // goroutine to handle a batch of matches
-func worker(id int, matches <-chan *Match, opt string, tot int, result chan<- *Result, s chan<- signal) {
+func worker(matches <-chan *Match, opt string, tot int, result chan<- *Result, s chan<- signal) {
 	for m := range matches {
 		m.processCrobotsMatch(opt, tot, result)
 	}
@@ -410,7 +408,7 @@ func benchMatches(limit, slices int, perm []int, robots []string, jobs chan *Mat
 	for i := 0; i < t; i++ {
 		current := perm[j : j+3]
 		a, b, c := current[0], current[1], current[2]
-		jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], br}}
+		jobs <- &Match{Robots: [4]string{robots[a], robots[b], robots[c], br}}
 		j += 3
 	}
 	return t
@@ -423,7 +421,7 @@ func randomMatches(limit, slices int, perm []int, robots []string, jobs chan *Ma
 	for i := 0; i < t; i++ {
 		current := perm[j : j+4]
 		a, b, c, d := current[0], current[1], current[2], current[3]
-		jobs <- &Match{Robots: []string{robots[a], robots[b], robots[c], robots[d]}}
+		jobs <- &Match{Robots: [4]string{robots[a], robots[b], robots[c], robots[d]}}
 		j += 4
 	}
 	return t
@@ -439,6 +437,8 @@ func min(a, b int) int {
 func main() {
 
 	log.Println("GoRobots", Version)
+	// NumCPU is the number of detected CPUs/cores
+	NumCPU := runtime.NumCPU()
 	log.Println("Detected CPU(s)/core(s):", NumCPU)
 	tournamentType := flag.String("type", "", "tournament type: f2f, 3vs3 or 4vs4")
 	configFile := flag.String("config", "config.yml", "YAML configuration file")
@@ -456,15 +456,15 @@ func main() {
 	flag.Parse()
 
 	c := *cpu
-
+	var workers = NumCPU
 	if c < 1 || c > 2*NumCPU {
 		log.Println("Invalid parameter cpu", c, ". Using default", NumCPU)
 	} else {
-		NumCPU = c
+		workers = c
 	}
 
-	log.Println("Using", NumCPU, "CPU(s)/core(s)")
-	runtime.GOMAXPROCS(NumCPU)
+	log.Println("Using", workers, "CPU(s)/core(s)")
+	runtime.GOMAXPROCS(workers)
 
 	if _, ok := schema[*tournamentType]; !ok {
 		log.Fatalln("Error: invalid tournament type: ", *tournamentType)
@@ -499,14 +499,13 @@ func main() {
 		log.Fatal("Error: robot list too small!")
 	}
 
-	var robots []string
-
 	Crobots = *crobotsExecutable
 
 	if !commandExists(Crobots) {
 		log.Fatal("Error: Crobots executable not found ", Crobots)
 	}
 
+	var robots = make([]string, 0, listSize)
 	for _, r := range config.ListRobots {
 		t := checkAndCompile(r, func(r string) string {
 			return config.SourcePath + Separator + r
@@ -553,11 +552,11 @@ func main() {
 	start := time.Now()
 	result := make(chan *Result)
 	total := &Result{Robots: make(map[string]*count.Robot)}
-	jobs := make(chan *Match, NumCPU)
+	jobs := make(chan *Match, workers)
 	sig := make(chan signal)
 
-	for w := 1; w <= NumCPU; w++ {
-		go worker(w, jobs, opt, tot, result, sig)
+	for w := 1; w <= workers; w++ {
+		go worker(jobs, opt, tot, result, sig)
 	}
 
 	go func() {
@@ -601,7 +600,6 @@ func main() {
 
 		for l > 0 {
 			var t int
-			rand.Seed(time.Now().UnixNano())
 			perm := rand.Perm(listSize)
 			if br != "" {
 				t = benchMatches(l, slices, perm, robots, jobs, br)
@@ -619,7 +617,7 @@ func main() {
 		generateCombinations(robots, tot, jobs, *verbose)
 	}
 	close(jobs)
-	for i := 0; i < NumCPU; i += 1 {
+	for i := 0; i < workers; i += 1 {
 		<-sig
 	}
 	close(result)

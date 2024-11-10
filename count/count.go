@@ -10,7 +10,7 @@ type Robot struct {
 	Name   string
 	Games  int
 	Wins   int
-	Ties   []int // ties2, ties3, ties4
+	Ties   [3]int // ties2, ties3, ties4
 	Points int
 	Eff    float32
 }
@@ -21,7 +21,7 @@ func GetName(s string) string {
 }
 
 func getSurvivor(s string) *Robot {
-	return &Robot{Name: GetName(s[8:19]), Wins: 0, Ties: []int{0, 0, 0}}
+	return &Robot{Name: GetName(s[8:19]), Wins: 0, Ties: [3]int{0, 0, 0}}
 }
 
 func getRobot(s string, robots map[string]*Robot) *Robot {
@@ -29,7 +29,7 @@ func getRobot(s string, robots map[string]*Robot) *Robot {
 	if r, ok := robots[n]; ok {
 		return r
 	}
-	return &Robot{Name: n, Ties: []int{0, 0, 0}}
+	return &Robot{Name: n, Ties: [3]int{0, 0, 0}}
 }
 
 func updateRobot(s string, survivors map[string]*Robot, robots map[string]*Robot) {
@@ -68,7 +68,7 @@ func ParseLogs(lines [][]byte) map[string]*Robot {
 
 		if strings.HasPrefix(line, "Match") {
 			survivors = make(map[string]*Robot)
-		} else if strings.Index(line, "damage=%") != -1 {
+		} else if strings.Contains(line, "damage=%") {
 			if l < 50 {
 				updateSurvivor(line, survivors)
 			} else {
@@ -82,7 +82,7 @@ func ParseLogs(lines [][]byte) map[string]*Robot {
 				}
 
 			}
-		} else if strings.Index(line, "Cumulative") != -1 {
+		} else if strings.Contains(line, "Cumulative") {
 			s := len(survivors)
 
 			switch s {
@@ -98,7 +98,7 @@ func ParseLogs(lines [][]byte) map[string]*Robot {
 					value.Ties[i] = 1
 				}
 			}
-		} else if strings.Index(line, "wins=") != -1 {
+		} else if strings.Contains(line, "wins=") {
 			if l < 50 {
 				updateRobot(line, survivors, robots)
 			} else {
