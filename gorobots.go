@@ -266,7 +266,7 @@ func check(err error) bool {
 
 // print out tournament results to stdout or file or SQL updates
 // if errors occur always print out to stdout
-func printRobots(out, sql, tournamentType *string, tot int, result *Result) {
+func printRobots(out, sql, tournamentType *string, tot int, result Result) {
 	var bots []count.Robot
 
 	for _, robot := range result.Robots {
@@ -474,7 +474,7 @@ func main() {
 
 	if *parseLog != "" {
 		content := logToString(*parseLog)
-		result := &Result{Robots: count.ParseLogs(bytes.Split(content, EOF))}
+		result := Result{Robots: count.ParseLogs(bytes.Split(content, EOF))}
 		printRobots(out, sql, tournamentType, tot, result)
 		return
 	}
@@ -551,7 +551,7 @@ func main() {
 	log.Println("Start processing", *tournamentType, "...")
 	start := time.Now()
 	result := make(chan Result)
-	total := &Result{Robots: make(map[string]*count.Robot)}
+	total := Result{Robots: make(map[string]*count.Robot)}
 	jobs := make(chan Match, workers)
 	sig := make(chan signal)
 
