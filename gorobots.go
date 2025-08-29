@@ -19,7 +19,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.5.3-20241110"
+	Version = "v1.5.4-20250829"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -131,7 +131,7 @@ func (v *Verbose) Print(i int) {
 }
 
 // generate standard, ordered tournament match combinations
-func generateCombinations(list []string, size int, c chan<- *Match, verbose bool) {
+func generateCombinations(list []string, size int, c chan<- Match, verbose bool) {
 	tot := len(list)
 	switch size {
 	case 2:
@@ -145,7 +145,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 		}
 		for i := 0; i < tot-1; i++ {
 			for j := i + 1; j < tot; j++ {
-				c <- &Match{Robots: [4]string{list[i], list[j]}}
+				c <- Match{Robots: [4]string{list[i], list[j]}}
 			}
 			if v.Enabled {
 				v.Print(i)
@@ -163,7 +163,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				for k := j + 1; k < tot; k++ {
-					c <- &Match{Robots: [4]string{list[i], list[j], list[k]}}
+					c <- Match{Robots: [4]string{list[i], list[j], list[k]}}
 				}
 			}
 			if v.Enabled {
@@ -183,7 +183,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 			for j := i + 1; j < tot-2; j++ {
 				for k := j + 1; k < tot-1; k++ {
 					for z := k + 1; z < tot; z++ {
-						c <- &Match{Robots: [4]string{list[i], list[j], list[k], list[z]}}
+						c <- Match{Robots: [4]string{list[i], list[j], list[k], list[z]}}
 					}
 				}
 			}
@@ -197,7 +197,7 @@ func generateCombinations(list []string, size int, c chan<- *Match, verbose bool
 }
 
 // generate standard, ordered sub-combinations for a benchmark tournament
-func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- *Match, verbose bool) {
+func generateCombinationsForBenchmark(robot string, list []string, size int, c chan<- Match, verbose bool) {
 	tot := len(list)
 	switch size {
 	case 2:
@@ -210,7 +210,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 			},
 		}
 		for i := 0; i < tot; i++ {
-			c <- &Match{Robots: [4]string{list[i], robot}}
+			c <- Match{Robots: [4]string{list[i], robot}}
 			if v.Enabled {
 				v.Print(i)
 			}
@@ -226,7 +226,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 		}
 		for i := 0; i < tot-1; i++ {
 			for j := i + 1; j < tot; j++ {
-				c <- &Match{Robots: [4]string{list[i], list[j], robot}}
+				c <- Match{Robots: [4]string{list[i], list[j], robot}}
 			}
 			if v.Enabled {
 				v.Print(i)
@@ -244,7 +244,7 @@ func generateCombinationsForBenchmark(robot string, list []string, size int, c c
 		for i := 0; i < tot-2; i++ {
 			for j := i + 1; j < tot-1; j++ {
 				for k := j + 1; k < tot; k++ {
-					c <- &Match{Robots: [4]string{list[i], list[j], list[k], robot}}
+					c <- Match{Robots: [4]string{list[i], list[j], list[k], robot}}
 				}
 			}
 			if v.Enabled {
@@ -344,7 +344,7 @@ func printRobots(out, sql, tournamentType *string, tot int, result *Result) {
 }
 
 // given a match returns a Crobots command ready to be executed
-func (m *Match) executeCrobotsMatch(opt string, n int) ([]byte, error) {
+func (m Match) executeCrobotsMatch(opt string, n int) ([]byte, error) {
 	switch n {
 	case 2:
 		return exec.Command(Crobots, opt, StdMatchLimitCycles, m.Robots[0], m.Robots[1]).Output()
@@ -359,7 +359,7 @@ func (m *Match) executeCrobotsMatch(opt string, n int) ([]byte, error) {
 }
 
 // given a match execute Crobots command and parse output to update partial results
-func (m *Match) processCrobotsMatch(opt string, tot int, result chan<- *Result) {
+func (m Match) processCrobotsMatch(opt string, tot int, result chan<- Result) {
 	out, err := m.executeCrobotsMatch(opt, tot)
 	if err != nil {
 		log.Fatal(err)
@@ -368,11 +368,11 @@ func (m *Match) processCrobotsMatch(opt string, tot int, result chan<- *Result) 
 		log.Fatal("no output from Crobots match")
 	}
 	partial := count.ParseLogs(bytes.Split(out, EOF))
-	result <- &Result{Robots: partial}
+	result <- Result{Robots: partial}
 }
 
 // goroutine to handle a batch of matches
-func worker(matches <-chan *Match, opt string, tot int, result chan<- *Result, s chan<- signal) {
+func worker(matches <-chan Match, opt string, tot int, result chan<- Result, s chan<- signal) {
 	for m := range matches {
 		m.processCrobotsMatch(opt, tot, result)
 	}
@@ -402,26 +402,26 @@ func checkAndCompile(r string, path func(r string) string) string {
 }
 
 // generate matches for benchmark using current random permutation and queue them all
-func benchMatches(limit, slices int, perm []int, robots []string, jobs chan *Match, br string) int {
+func benchMatches(limit, slices int, perm []int, robots []string, jobs chan Match, br string) int {
 	t := min(limit, slices)
 	j := 0
 	for i := 0; i < t; i++ {
 		current := perm[j : j+3]
 		a, b, c := current[0], current[1], current[2]
-		jobs <- &Match{Robots: [4]string{robots[a], robots[b], robots[c], br}}
+		jobs <- Match{Robots: [4]string{robots[a], robots[b], robots[c], br}}
 		j += 3
 	}
 	return t
 }
 
 // generate matches using current random permutation and queue them all
-func randomMatches(limit, slices int, perm []int, robots []string, jobs chan *Match) int {
+func randomMatches(limit, slices int, perm []int, robots []string, jobs chan Match) int {
 	t := min(limit, slices)
 	j := 0
 	for i := 0; i < t; i++ {
 		current := perm[j : j+4]
 		a, b, c, d := current[0], current[1], current[2], current[3]
-		jobs <- &Match{Robots: [4]string{robots[a], robots[b], robots[c], robots[d]}}
+		jobs <- Match{Robots: [4]string{robots[a], robots[b], robots[c], robots[d]}}
 		j += 4
 	}
 	return t
@@ -550,9 +550,9 @@ func main() {
 	}
 	log.Println("Start processing", *tournamentType, "...")
 	start := time.Now()
-	result := make(chan *Result)
+	result := make(chan Result)
 	total := &Result{Robots: make(map[string]*count.Robot)}
-	jobs := make(chan *Match, workers)
+	jobs := make(chan Match, workers)
 	sig := make(chan signal)
 
 	for w := 1; w <= workers; w++ {
