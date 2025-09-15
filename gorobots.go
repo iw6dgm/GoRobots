@@ -19,7 +19,7 @@ import (
 
 const (
 	// Version is the software version format v#.#.#-timestamp
-	Version = "v1.5.4-20250829"
+	Version = "v1.5.4-20250915"
 	// Separator is the OS dependent path separator
 	Separator = string(os.PathSeparator)
 	// RobotSourceExt is the file extension of the robot source code
@@ -552,7 +552,7 @@ func main() {
 	start := time.Now()
 	result := make(chan Result)
 	total := Result{Robots: make(map[string]*count.Robot)}
-	jobs := make(chan Match, workers)
+	jobs := make(chan Match)
 	sig := make(chan signal)
 
 	for w := 1; w <= workers; w++ {
