@@ -1,5 +1,5 @@
 96388fa80d99a163d75a7689b9cc01ba *gorobots-1.5.1-macos-x86_64.gz
-782d5947563ccc52d38354bcef789620 *gorobots-1.5.3-linux-x86_32.gz
 8a57ab9d6d8bcec1bf8a651d6affe6b3 *gorobots-1.5.3-linux-x86_64.gz
-62838b4758b9dc63c6a5546d3fab578f *gorobots-1.5.3-macos-arm64.gz
-5c7f103170d8a7ce96eeb89dbb0e700e *gorobots-1.5.3-win64.zip
+19e30b21b3cf911fd41fc1fad6d02097 *gorobots-1.5.4-linux-x86_32.gz
+b038dafa5dfe6986c0928861a5c30d73 *gorobots-1.5.4-macos-arm64.gz
+df2308ddb93d30d06b4273d43597dae0 *gorobots-1.5.4-win64.zip
