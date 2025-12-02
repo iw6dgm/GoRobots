@@ -41,10 +41,10 @@ var (
 	tournament2013 = []string{}
 	tournament2015 = []string{}
 	tournament2020 = []string{}
+	tournament2025 = []string{}
 	micro          = []string{}
 	crobs          = []string{}
-	aminet         = []string{}
-	cplusplus      = []string{}
+	others         = []string{}
 
 	tournaments = [][]string{}
 	TYPES       = []string{"f2f", "3vs3", "4vs4"}
@@ -155,7 +155,7 @@ func collect() {
 		tournament1995, tournament1996, tournament1997, tournament1998, tournament1999,
 		tournament2000, tournament2001, tournament2002, tournament2003, tournament2004,
 		tournament2007, tournament2010, tournament2011, tournament2012, tournament2013,
-		tournament2015, tournament2020, crobs, micro, aminet, cplusplus,
+		tournament2015, tournament2020, tournament2025, crobs, micro, others,
 	}
 
 	// Shuffle tournaments
@@ -165,13 +165,13 @@ func collect() {
 }
 
 func countRobots() {
-	robots = len(micro) + len(crobs) + len(aminet) + len(cplusplus) +
+	robots = len(micro) + len(crobs) + len(others) +
 		len(tournament1990) + len(tournament1991) + len(tournament1992) + len(tournament1993) +
 		len(tournament1994) + len(tournament1995) + len(tournament1996) + len(tournament1997) +
 		len(tournament1998) + len(tournament1999) + len(tournament2000) + len(tournament2001) +
 		len(tournament2002) + len(tournament2003) + len(tournament2004) + len(tournament2007) +
 		len(tournament2010) + len(tournament2011) + len(tournament2012) + len(tournament2013) +
-		len(tournament2015) + len(tournament2020)
+		len(tournament2015) + len(tournament2020) + len(tournament2025)
 
 	fmt.Printf("TOTAL Robots :%d\n", robots)
 }
@@ -234,8 +234,7 @@ func shuffle() {
 	shuffleSlice(tournament2020)
 	shuffleSlice(crobs)
 	shuffleSlice(micro)
-	shuffleSlice(aminet)
-	shuffleSlice(cplusplus)
+	shuffleSlice(others)
 }
 
 // shuffleSlice shuffles a slice in place
@@ -246,15 +245,8 @@ func shuffleSlice(slice []string) {
 }
 
 func setupMidi() {
-	fmt.Print("Loading cplusplus... ")
-	cplusplus = []string{
-		"cplusplus/selvaggio",
-		"cplusplus/vikingo",
-	}
-	fmt.Printf("%d robot(s)\n", len(cplusplus))
-
-	fmt.Print("Loading aminet... ")
-	aminet = []string{
+	fmt.Print("Loading others... ")
+	others = []string{
 		"aminet/anticlock",
 		"aminet/beaver",
 		"aminet/blindschl",
@@ -263,8 +255,10 @@ func setupMidi() {
 		"aminet/opfer",
 		"aminet/schwan",
 		"aminet/tron",
+		"cplusplus/selvaggio",
+		"cplusplus/vikingo",
 	}
-	fmt.Printf("%d robot(s)\n", len(aminet))
+	fmt.Printf("%d robot(s)\n", len(others))
 
 	fmt.Print("Loading 1990... ")
 	tournament1990 = []string{
@@ -1073,6 +1067,33 @@ func setupMidi() {
 	}
 	fmt.Printf("%d robot(s)\n", len(tournament2020))
 
+	fmt.Print("Loading 2025... ")
+	tournament2025 = []string{
+		"2025/blue", // late entry
+		"2025/extrasmall",
+		"2025/flash11",
+		"2025/gerty6",
+		"2025/hal9025",
+		"2025/hulk_25",
+		"2025/hydra",
+		"2025/kerberos",
+		"2025/meeseeks1",
+		"2025/meeseeks2",
+		"2025/nova",
+		"2025/pippo25a",
+		"2025/rabbitc",
+		"2025/rotaprinc8",
+		"2025/sentry2",
+		"2025/sentry3",
+		"2025/sgorbio",
+		"2025/slant6",
+		"2025/supremo",
+		"2025/trouble3",
+		"2025/ultron_25",
+		"2025/wall-e_vii",
+	}
+	fmt.Printf("%d robot(s)\n", len(tournament2025))
+
 	fmt.Print("Loading crobs... ")
 	crobs = []string{
 		"crobs/adversar",
@@ -1205,21 +1226,16 @@ func setupMidi() {
 }
 
 func setupMicro() {
-	fmt.Print("Loading cplusplus... ")
-	cplusplus = []string{
-		"cplusplus/selvaggio",
-		"cplusplus/vikingo",
-	}
-	fmt.Printf("%d robot(s)\n", len(cplusplus))
-
-	fmt.Print("Loading aminet... ")
-	aminet = []string{
+	fmt.Print("Loading others... ")
+	others = []string{
 		"aminet/anticlock",
 		"aminet/mirobot",
 		"aminet/schwan",
 		"aminet/tron",
+		"cplusplus/selvaggio",
+		"cplusplus/vikingo",
 	}
-	fmt.Printf("%d robot(s)\n", len(aminet))
+	fmt.Printf("%d robot(s)\n", len(others))
 
 	fmt.Print("Loading 1990... ")
 	tournament1990 = []string{
@@ -1687,6 +1703,22 @@ func setupMicro() {
 	}
 	fmt.Printf("%d robot(s)\n", len(tournament2020))
 
+	fmt.Print("Loading 2025... ")
+	tournament2025 = []string{
+		"2025/extrasmall",
+		"2025/flash11",
+		"2025/kerberos",
+		"2025/pippo25a",
+		"2025/sentry2",
+		"2025/sentry3",
+		"2025/sgorbio",
+		"2025/slant6",
+		"2025/trouble3",
+		"2025/ultron_25",
+		"2025/wall-e_vii",
+	}
+	fmt.Printf("%d robot(s)\n", len(tournament2025))
+
 	fmt.Print("Loading crobs... ")
 	crobs = []string{
 		"crobs/adversar",
@@ -1796,15 +1828,8 @@ func setupMicro() {
 }
 
 func setup() {
-	fmt.Print("Loading cplusplus... ")
-	cplusplus = []string{
-		"cplusplus/selvaggio",
-		"cplusplus/vikingo",
-	}
-	fmt.Printf("%d robot(s)\n", len(cplusplus))
-
-	fmt.Print("Loading aminet... ")
-	aminet = []string{
+	fmt.Print("Loading others... ")
+	others = []string{
 		"aminet/anticlock",
 		"aminet/beaver",
 		"aminet/blindschl",
@@ -1813,8 +1838,10 @@ func setup() {
 		"aminet/opfer",
 		"aminet/schwan",
 		"aminet/tron",
+		"cplusplus/selvaggio",
+		"cplusplus/vikingo",
 	}
-	fmt.Printf("%d robot(s)\n", len(aminet))
+	fmt.Printf("%d robot(s)\n", len(others))
 
 	fmt.Print("Loading 1990... ")
 	tournament1990 = []string{
@@ -2766,6 +2793,36 @@ func setup() {
 		"2020/wizard2",
 	}
 	fmt.Printf("%d robot(s)\n", len(tournament2020))
+
+	fmt.Print("Loading 2025... ")
+	tournament2020 = []string{
+		"2025/blue", // late entry
+		"2025/extrasmall",
+		"2025/flash11",
+		"2025/gerty6",
+		"2025/hal9025",
+		"2025/hulk_25",
+		"2025/hydra",
+		"2025/ironman_25",
+		"2025/jedi15",
+		"2025/kerberos",
+		"2025/meeseeks1",
+		"2025/meeseeks2",
+		"2025/nova",
+		"2025/pippo25a",
+		"2025/rabbitc",
+		"2025/rotaprinc8",
+		"2025/sentry2",
+		"2025/sentry3",
+		"2025/sgorbio",
+		"2025/slant6",
+		"2025/supremo",
+		"2025/thor_25",
+		"2025/trouble3",
+		"2025/ultron_25",
+		"2025/wall-e_vii",
+	}
+	fmt.Printf("%d robot(s)\n", len(tournament2025))
 
 	fmt.Print("Loading crobs... ")
 	crobs = []string{
