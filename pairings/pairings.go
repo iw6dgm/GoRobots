@@ -73,7 +73,7 @@ func main() {
 
 	show()
 	buildConfigFileYAML()
-	buildSQLInserts()
+	//buildSQLInserts() // optional - not needed if using `tournament` scripts
 }
 
 // getBasename returns file basename (no path)
@@ -105,16 +105,16 @@ func buildConfigFileYAML() {
 			fmt.Printf("label: '%s%d'\n", label, n)
 
 			var sb strings.Builder
-			sb.WriteString("listRobots: [")
+			sb.WriteString("listRobots: [\n")
 			for i, s := range round {
 				if i != 0 {
-					sb.WriteString(", ")
+					sb.WriteString(",\n")
 				}
 				sb.WriteString("'")
 				sb.WriteString(s)
 				sb.WriteString("'")
 			}
-			sb.WriteString("]")
+			sb.WriteString("\n]")
 			fmt.Println(sb.String())
 			n++
 		}
@@ -425,7 +425,7 @@ func setupMidi() {
 		"1993/spartaco",
 		"1993/target",
 		"1993/tm",
-		"1993/tournament",
+		"1993/torneo",
 		"1993/vannina",
 		"1993/vocus",
 		"1993/warrior4",
@@ -2795,7 +2795,7 @@ func setup() {
 	fmt.Printf("%d robot(s)\n", len(tournament2020))
 
 	fmt.Print("Loading 2025... ")
-	tournament2020 = []string{
+	tournament2025 = []string{
 		"2025/blue", // late entry
 		"2025/extrasmall",
 		"2025/flash11",
