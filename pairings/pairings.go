@@ -76,11 +76,6 @@ func main() {
 	//buildSQLInserts() // optional - not needed if using `tournament` scripts
 }
 
-// getBasename returns file basename (no path)
-func getBasename(filename string) string {
-	return filepath.Base(filename)
-}
-
 // Show pairings (plain text)
 func show() {
 	n := 1
@@ -130,7 +125,7 @@ func buildSQLInserts() {
 
 			var values strings.Builder
 			for i, s := range round {
-				values.WriteString(fmt.Sprintf("('%s')", getBasename(s)))
+				values.WriteString(fmt.Sprintf("('%s')", filepath.Base(s)))
 				if i != len(round)-1 {
 					values.WriteString(",\n")
 				}
@@ -193,7 +188,7 @@ func alternativePairing() bool {
 		for _, r := range tournament {
 			// Check if robot already exists in the current group by comparing basenames
 			if slices.ContainsFunc(rounds[groupIndex], func(existing string) bool {
-				return getBasename(existing) == getBasename(r)
+				return filepath.Base(existing) == filepath.Base(r)
 			}) {
 				return true // has conflicts
 			}
