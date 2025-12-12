@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tournament Execution script v.1.15 21/10/2024 (C) Maurizio Camangi
+# Tournament Execution script v.1.16 12/12/2025 (C) Maurizio Camangi
 #
 
 set -e
@@ -59,6 +59,10 @@ if [ ! -z ${ROBOT+x} ] ; then
   OPT="-bench $ROBOT"
 fi
 
+if [ ! -z ${CPU+x} ] ; then
+  OPT="$OPT -cpu $CPU"
+fi
+
 if [ "$ROBOT" != "" ] && [ "$MODE" != "clean" ] && [ ! -s ${ROBOT}.ro ]
 then
 {
@@ -71,7 +75,7 @@ if [ "$MODE" = "test" ]
 then
 {
   echo "Processing $CONFIG ..."
-  $GOROBOTS $OPT -type 4vs4 -config $CONFIG -test
+  $GOROBOTS $OPT -type f2f -config $CONFIG -test
   echo "Test mode completed. Script exits."
   exit 0
 }
