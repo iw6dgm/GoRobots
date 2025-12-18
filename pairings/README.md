@@ -4,4 +4,4 @@ Script to randomly generate tournament rounds for all ever written robots (macro
 
 It attempts to create rounds with no conflicts (robots with different path but same base name).
 
-It prints out the list of rounds, the YAML configuration to be used with GoRobots and the SQL code to initialise a sqlite3 database (must be already setup with the Crobots schema).
+It prints out the list of rounds and optionally the SQL code to initialise a sqlite3 database (must be already setup with the Crobots schema). It saves the YAML configuration to files to be used with GoRobots.

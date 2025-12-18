@@ -78,8 +78,7 @@ func main() {
 	//buildSQLInserts() // optional - not needed if using `tournament` scripts
 }
 
-// uncomment this and comment the main above
-// if you want to use the single list
+/* uncomment this and comment the main above if you want to use the single list */
 // func main() {
 // 	setupFromSingleList()
 // 	show()
@@ -106,7 +105,7 @@ func buildConfigFileYAML() {
 	for _, round := range rounds {
 		if len(round) > 0 {
 			//fmt.Printf("------- CFG group%d ------\n", n)
-			f, err := os.Create(fmt.Sprintf("group%d.yml", n))
+			f, err := os.Create(fmt.Sprintf("%s%d.yml", label, n))
 			check(err)
 			defer f.Close()
 			w := bufio.NewWriter(f)
@@ -280,7 +279,7 @@ func setupFromSingleList() {
 			if slices.ContainsFunc(rounds[groupIndex], func(existing string) bool {
 				return filepath.Base(existing) == filepath.Base(r)
 			}) {
-				fmt.Printf("This robot %s generated a conflict\n", filepath.Base(r))
+				fmt.Printf("Robot %s generated a conflict\n", filepath.Base(r))
 				return true // has conflicts
 			}
 			rounds[groupIndex] = append(rounds[groupIndex], r)
