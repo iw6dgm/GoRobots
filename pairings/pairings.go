@@ -78,6 +78,14 @@ func main() {
 	//buildSQLInserts() // optional - not needed if using `tournament` scripts
 }
 
+// uncomment this and comment the main above
+// if you want to use the single list
+// func main() {
+// 	setupFromSingleList()
+// 	show()
+// 	buildConfigFileYAML()
+// }
+
 // Show pairings (plain text)
 func show() {
 	n := 1
@@ -248,6 +256,55 @@ func shuffleSlice(slice []string) {
 	rand.Shuffle(len(slice), func(i, j int) {
 		slice[i], slice[j] = slice[j], slice[i]
 	})
+}
+
+// use this from a single list of robots
+func setupFromSingleList() {
+	var list = []string{ /* add robots here */ }
+
+	robots = len(list)
+	groupCount := robots / GROUP_SIZE
+	if robots%GROUP_SIZE > 0 {
+		groupCount++
+	}
+	pairing := func() bool {
+
+		groupIndex := 0
+		rounds = make([][]string, groupCount)
+
+		for i := 0; i < groupCount; i++ {
+			rounds[i] = []string{}
+		}
+		for _, r := range list {
+			// Check if robot already exists in the current group by comparing basenames
+			if slices.ContainsFunc(rounds[groupIndex], func(existing string) bool {
+				return filepath.Base(existing) == filepath.Base(r)
+			}) {
+				fmt.Printf("This robot %s generated a conflict\n", filepath.Base(r))
+				return true // has conflicts
+			}
+			rounds[groupIndex] = append(rounds[groupIndex], r)
+
+			groupIndex++
+			if groupIndex == groupCount {
+				groupIndex = 0
+			}
+		}
+		return false
+	}
+
+	attempts := 0
+	var withConflicts bool
+
+	for {
+		attempts++
+		fmt.Printf("ATTEMPT : %d\n", attempts)
+		shuffleSlice(list)
+		withConflicts = pairing()
+		if !withConflicts {
+			break
+		}
+	}
 }
 
 func setupMidi() {
