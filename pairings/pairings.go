@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -90,27 +92,30 @@ func show() {
 	}
 }
 
-// Show pairings YAML format
+// Save pairings into YAML files
 func buildConfigFileYAML() {
 	n := 1
 	for _, round := range rounds {
 		if len(round) > 0 {
-			fmt.Printf("------- CFG group%d ------\n", n)
-			fmt.Printf("matchF2F: %d\nmatch3VS3: %d\nmatch4VS4: %d\nsourcePath: '.'\n", matchF2F, match3vs3, match4vs4)
-			fmt.Printf("label: '%s%d'\n", label, n)
+			//fmt.Printf("------- CFG group%d ------\n", n)
+			f, err := os.Create(fmt.Sprintf("group%d.yml", n))
+			check(err)
+			defer f.Close()
+			w := bufio.NewWriter(f)
+			_, err = fmt.Fprintf(w, "matchF2F: %d\nmatch3VS3: %d\nmatch4VS4: %d\nsourcePath: '.'\n", matchF2F, match3vs3, match4vs4)
+			check(err)
+			_, err = fmt.Fprintf(w, "label: '%s%d'\n", label, n)
+			check(err)
 
-			var sb strings.Builder
-			sb.WriteString("listRobots: [\n")
-			for i, s := range round {
-				if i != 0 {
-					sb.WriteString(",\n")
-				}
-				sb.WriteString("'")
-				sb.WriteString(s)
-				sb.WriteString("'")
+			_, err = w.WriteString("listRobots: [\n")
+			check(err)
+			for _, s := range round {
+				_, err = fmt.Fprintf(w, "'%s',\n", s)
+				check(err)
 			}
-			sb.WriteString("\n]")
-			fmt.Println(sb.String())
+			_, err = w.WriteString("\n]")
+			check(err)
+			w.Flush()
 			n++
 		}
 	}
@@ -141,6 +146,12 @@ func buildSQLInserts() {
 			}
 			n++
 		}
+	}
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
 	}
 }
 
