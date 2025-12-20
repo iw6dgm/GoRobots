@@ -1447,7 +1447,7 @@ func setupMicro() {
 		path + "robocop3",
 		path + "spartaco",
 		path + "target",
-		path + "tournament",
+		path + "torneo",
 		path + "vannina",
 		path + "wassilij",
 		path + "wolfgang",
@@ -2125,7 +2125,7 @@ func setup() {
 		path + "spartaco",
 		path + "target",
 		path + "tm",
-		path + "tournament",
+		path + "torneo",
 		path + "vannina",
 		path + "vocus",
 		path + "warrior4",
@@ -2504,7 +2504,7 @@ func setup() {
 	fmt.Printf("%d robot(s)\n", len(tournament2001))
 
 	fmt.Print("Loading 2002... ")
-	path = fmt.Sprintf("2003%s", Separator)
+	path = fmt.Sprintf("2002%s", Separator)
 	tournament2002 = []string{
 		path + "01",
 		path + "adsl",
