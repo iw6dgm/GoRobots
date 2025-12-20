@@ -17,6 +17,8 @@ IF DEFINED ROBOT (
     SET OPT=
 )
 
+IF DEFINED CPU ( SET OPT=%OPT% -cpu %CPU% )
+
 IF "%COMMAND%" == "clean" (
     IF DEFINED ROBOT (
         IF EXIST %ROBOT%.ro ( DEL %ROBOT%.ro )
