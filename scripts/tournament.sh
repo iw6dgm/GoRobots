@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tournament Execution script v.1.16 12/12/2025 (C) Maurizio Camangi
+# Tournament Execution script v.1.17 21/12/2025 (C) Maurizio Camangi
 #
 
 set -e
@@ -14,7 +14,7 @@ unset OPT
 if [ $# -ne 2 ]
 then
 {
-  echo "Usage: ${PROCESS} [config] [f2f|3vs3|4vs4|all|test|init|clean]"
+  echo "Usage: ${PROCESS} [config] [f2f|3vs3|4vs4|all|test|init|clean|reset]"
   exit 1
 }
 fi
@@ -106,6 +106,19 @@ EOF
   exit 0
 }
 fi
+
+if [ "$MODE" = "reset" ]
+then
+{
+  cat <<EOF | sqlite3 $DATABASE
+UPDATE results_f2f SET games=0,ties=0,wins=0,points=0;
+UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0;
+UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0;
+EOF
+  exit 0
+}
+fi
+
 
 if [ "$MODE" = "init" ]
 then

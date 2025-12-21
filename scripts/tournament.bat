@@ -6,7 +6,7 @@ SET SQL=%TMP%\%RANDOM%.SQL
 SET COMMAND=%1
 
 IF NOT DEFINED COMMAND (
-    ECHO "Usage: tournament.bat [test|clean|init|f2f|3vs3|4vs4|all]"
+    ECHO "Usage: tournament.bat [test|clean|reset|init|f2f|3vs3|4vs4|all]"
     EXIT /B 1
 )
 
@@ -51,6 +51,13 @@ IF "%COMMAND%" == "init" (
             ECHO INSERT INTO results_4vs4(robot^) VALUES('%%~ny'^); | sqlite3 %DATABASE%
         )
     )
+    EXIT /B
+)
+
+IF "%COMMAND%" == "reset" (
+    ECHO UPDATE results_f2f SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
+    ECHO UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
+    ECHO UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
     EXIT /B
 )
 
