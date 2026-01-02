@@ -1,12 +1,28 @@
 @ECHO off
 
-IF NOT DEFINED CONF ( SET CONF=conf\TestConf.yml )
-IF NOT DEFINED DATABASE ( SET DATABASE=db\crobots.db )
+IF NOT DEFINED CONF (
+    ECHO Configuration file undefined
+    EXIT /B 1
+)
+IF NOT DEFINED DATABASE (
+    ECHO Database undefined
+    EXIT /B 1
+)
+
+IF NOT EXIST %CONF% (
+    ECHO Configuration file %CONF% not found
+    EXIT /B 1
+)
+IF NOT EXIST %DATABASE% (
+    ECHO Database %DATABASE% not found
+    EXIT /B 1
+)
+
 SET SQL=%TMP%\%RANDOM%.SQL
 SET COMMAND=%1
 
 IF NOT DEFINED COMMAND (
-    ECHO "Usage: tournament.bat [test|clean|reset|init|f2f|3vs3|4vs4|all]"
+    ECHO Usage: tournament.bat [test^|clean^|reset^|init^|f2f^|3vs3^|4vs4^|all]
     EXIT /B 1
 )
 
@@ -55,9 +71,18 @@ IF "%COMMAND%" == "init" (
 )
 
 IF "%COMMAND%" == "reset" (
-    ECHO UPDATE results_f2f SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
-    ECHO UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
-    ECHO UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
+    IF DEFINED ROBOT (
+        IF EXIST %ROBOT%.ro ( DEL %ROBOT%.ro )
+        FOR %%r IN (%ROBOT%) DO (
+            ECHO UPDATE results_f2f SET games=0,ties=0,wins=0,points=0 WHERE robot='%%~nr'; | sqlite3 %DATABASE%
+            ECHO UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0 WHERE robot='%%~nr'; | sqlite3 %DATABASE%
+            ECHO UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0 WHERE robot='%%~nr'; | sqlite3 %DATABASE%
+        )
+    ) ELSE (
+        ECHO UPDATE results_f2f SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
+        ECHO UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
+        ECHO UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0; | sqlite3 %DATABASE%
+    )
     EXIT /B
 )
 
@@ -73,8 +98,11 @@ IF DEFINED ROBOT (
 )
 
 IF "%COMMAND%" == "test" (
-    IF NOT EXIST %DATABASE% ECHO %DATABASE% doesn't exist
     gorobots -test -config %CONF% -out NUL -sql %SQL% -type f2f %OPT%
+    IF ERRORLEVEL 1 (
+        ECHO Error running test..
+        EXIT /B 1
+    )
     EXIT /B
 )
 

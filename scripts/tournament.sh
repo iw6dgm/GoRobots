@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tournament Execution script v.1.17 21/12/2025 (C) Maurizio Camangi
+# Tournament Execution script v.1.18 27/12/2025 (C) Maurizio Camangi
 #
 
 set -e
@@ -110,11 +110,23 @@ fi
 if [ "$MODE" = "reset" ]
 then
 {
-  cat <<EOF | sqlite3 $DATABASE
+  if [ "$ROBOT" != "" ]
+  then
+  { # only bench robot
+    NAME=`basename $ROBOT`
+    echo "UPDATE results_f2f SET games=0,ties=0,wins=0,points=0 WHERE robot='${NAME}';" | sqlite3 $DATABASE
+    echo "UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0 WHERE robot='${NAME}';" | sqlite3 $DATABASE
+    echo "UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0 WHERE robot='${NAME}';" | sqlite3 $DATABASE
+  }
+  else
+  { # all robots
+    cat <<EOF | sqlite3 $DATABASE
 UPDATE results_f2f SET games=0,ties=0,wins=0,points=0;
 UPDATE results_3vs3 SET games=0,ties=0,wins=0,points=0;
 UPDATE results_4vs4 SET games=0,ties=0,wins=0,points=0;
 EOF
+  }
+  fi
   exit 0
 }
 fi
